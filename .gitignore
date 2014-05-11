@@ -3,6 +3,7 @@
 
 # C binary objects
 *.so
+*.o
 
 # trial
 _trial_temp/
