@@ -13,7 +13,7 @@ from txorm.compat import text_type, integer_types
 
 if not _PYPY and c_extensions_available:
     try:
-        from _variable import Variable
+        from txorm._variable import Variable
     except ImportError:
         from .base import Variable
 else:

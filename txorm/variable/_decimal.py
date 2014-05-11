@@ -12,7 +12,7 @@ from txorm.compat import is_basestring, integer_types, u
 
 if not _PYPY and c_extensions_available:
     try:
-        from _variable import Variable
+        from txorm._variable import Variable
     except ImportError:
         from .base import Variable
 else:
