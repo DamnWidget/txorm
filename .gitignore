@@ -1,0 +1,9 @@
+# python binary objects
+*.py[cob]
+
+# trial
+_trial_temp/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
