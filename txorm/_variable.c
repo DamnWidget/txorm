@@ -80,7 +80,7 @@ Variable_init(VariableObject *self, PyObject *args, PyObject *kwargs)
     /* elif value_factory is not Undef */
     else if (value_factory != Undef) {
         /*  self.set(value_factory(), from_db) */
-        CATCH(NULL, tmp = PyObject_CallFunctionObjArgs(value_factory, NULL));
+        CATCH(NULL, value = PyObject_CallFunctionObjArgs(value_factory, NULL));
         tmp = PyObject_CallMethod(
             (PyObject *)self, "set", "OO", value, from_db);
         Py_DECREF(value);
@@ -210,7 +210,7 @@ Variable_set(VariableObject *self, PyObject *args, PyObject *kwargs)
 {
     static char *kwlist[] = {"value", "from_db", NULL};
     PyObject *value = Py_None;
-    PyObject *from_db = Py_None;
+    PyObject *from_db = Py_False;
     PyObject *new_value = Py_None;
 
     if (!PyArg_ParseTupleAndKeywords(
