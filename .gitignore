@@ -1,9 +1,16 @@
 # python binary objects
 *.py[cob]
 
+# C binary objects
+*.so
+
 # trial
 _trial_temp/
 
 # Sublime Text
 *.sublime-project
 *.sublime-workspace
+
+# setuptools/distutils
+build/
+dist/
