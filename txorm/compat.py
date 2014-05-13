@@ -17,6 +17,7 @@ if '__pypy__' not in sys.modules:
     assert json
 else:
     _PYPY = True
+    import json
 
 _PY3 = False if sys.version_info < (3, 0) else True
 
