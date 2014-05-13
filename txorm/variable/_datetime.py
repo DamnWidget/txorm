@@ -25,6 +25,10 @@ class DateTimeVariable(Variable):
     """
     __slots__ = ()
 
+    def __init__(self, *args, **kwargs):
+        self._tzinfo = kwargs.pop('tzinfo', None)
+        super(DateTimeVariable, self).__init__(*args, **kwargs)
+
     def parse_set(self, value, from_db):
         if from_db is True:
             if isinstance(value, datetime):
