@@ -365,11 +365,11 @@ static PyMethodDef _variable_methods[] = {
 };
 
 #ifdef _PY3
-static PyModuleDef _variable_module = {
+static struct PyModuleDef _variable_module = {
     PyModuleDef_HEAD_INIT,
     "_variable",
     "C Implementation of the txorm Variable type",
-    -1.
+    -1,
     _variable_methods,
     NULL, NULL, NULL, NULL
 };
@@ -381,7 +381,7 @@ static PyModuleDef _variable_module = {
 
 PyMODINIT_FUNC
 #ifdef _PY3
-PyInit_variable(void)
+PyInit__variable(void)
 #else
 init_variable(void)
 #endif
