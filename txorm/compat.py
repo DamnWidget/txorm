@@ -26,7 +26,7 @@ if _PY3:
 
     text_type = str
     binary_type = bytes
-    integer_types = int
+    integer_types = (int, )
 
 else:
     from _compat.python2_ import pickle, StringIO
@@ -41,7 +41,11 @@ def u(string):
 
 
 def b(string):
-    return binary_type(string)
+    if _PY3:
+        if isinstance(string, memoryview):
+            return bytes(string)
+        return bytes(string.encode('utf8'))
+    return str(string)
 
 
 def is_basestring(value):
