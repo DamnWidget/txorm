@@ -7,10 +7,13 @@
 
 from .int import IntVariable
 from .bool import BoolVariable
+from ._date import DateVariable
+from ._time import TimeVariable
 from .float import FloatVariable
 from .raw_str import RawStrVariable
 from .unicode import UnicodeVariable
 from ._decimal import DecimalVariable
+from .timedelta import TimeDeltaVariable
 from ._datetime import DateTimeVariable
 from ._fraction import FractionVariable
 
@@ -29,5 +32,5 @@ else:
 __all__ = [
     'Variable', 'IntVariable', 'BoolVariable', 'FloatVariable',
     'RawStrVariable', 'DecimalVariable', 'UnicodeVariable', 'FractionVariable',
-    'DateTimeVariable'
+    'DateTimeVariable', 'DateVariable', 'TimeVariable', 'TimeDeltaVariable'
 ]

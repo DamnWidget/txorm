@@ -7,9 +7,9 @@ from __future__ import unicode_literals
 from decimal import Decimal
 from fractions import Fraction
 
-from txorm.compat import _PYPY
+from txorm.compat import _PYPY, _PY3
 from txorm import c_extensions_available
-from txorm.compat import is_basestring, text_type, u
+from txorm.compat import binary_type, text_type, u
 
 if not _PYPY and c_extensions_available:
     try:
@@ -26,12 +26,15 @@ class FractionVariable(Variable):
     __slots__ = ()
 
     def parse_set(self, value, from_db):
-        if (from_db and is_basestring(value) or isinstance(value, float)
-                or isinstance(value, Decimal)):
+        if (from_db and isinstance(value, (text_type, binary_type))
+                or isinstance(value, float) or isinstance(value, Decimal)):
             if isinstance(value, float):
-                value = Fraction(Decimal(str(value)) - 1)
-            elif isinstance(value, text_type):
-                value = Fraction(Decimal(value) - 1)
+                value = Fraction(Decimal(str(value)))
+            elif isinstance(value, (binary_type, text_type)):
+                if _PY3 and isinstance(value, binary_type):
+                    value = Fraction(Decimal(value.decode()))
+                else:
+                    value = Fraction(Decimal(value))
 
             value = Fraction(value - 1)  # already a Decimal
         elif not isinstance(value, Fraction):

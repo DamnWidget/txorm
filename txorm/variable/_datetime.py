@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 from txorm.compat import _PYPY
 from txorm import c_extensions_available
-from txorm.compat import text_type, integer_types
+from txorm.compat import text_type, binary_type, integer_types
 
 if not _PYPY and c_extensions_available:
     try:
@@ -23,7 +23,7 @@ else:
 class DateTimeVariable(Variable):
     """DateTime variable representation
     """
-    __slots__ = ()
+    __slots__ = ('_tzinfo')
 
     def __init__(self, *args, **kwargs):
         self._tzinfo = kwargs.pop('tzinfo', None)
@@ -33,7 +33,7 @@ class DateTimeVariable(Variable):
         if from_db is True:
             if isinstance(value, datetime):
                 pass
-            elif isinstance(value, text_type):
+            elif isinstance(value, (text_type, binary_type)):
                 if ' ' not in value:
                     raise ValueError('Unknown date/time format: {}'.format(
                         repr(value)
@@ -45,8 +45,13 @@ class DateTimeVariable(Variable):
                 raise TypeError('Expected datetime, found {}: {}'.format(
                     type(value), repr(value)
                 ))
+            if self._tzinfo is not None:
+                if value.tzinfo is None:
+                    value = value.replace(tzinfo=self._tzinfo)
+                else:
+                    value = value.astimezone(self._tzinfo)
         else:
-            if isinstance(value, integer_types):
+            if isinstance(value, integer_types + (float,)):
                 value = datetime.utcfromtimestamp(value)
             elif not isinstance(value, datetime):
                 raise TypeError('Expected datetime, found {}: {}'.format(
@@ -83,57 +88,3 @@ def _parse_date(date_str):
     year, month, day = date_str.split("-")
     return int(year), int(month), int(day)
 
-
-def _parse_interval_table():
-    table = {}
-    for units, delta in (
-        ("d day days", timedelta),
-        ("h hour hours", lambda x: timedelta(hours=x)),
-        ("m min minute minutes", lambda x: timedelta(minutes=x)),
-        ("s sec second seconds", lambda x: timedelta(seconds=x)),
-        ("ms millisecond milliseconds", lambda x: timedelta(milliseconds=x)),
-        ("microsecond microseconds", lambda x: timedelta(microseconds=x))
-    ):
-        for unit in units.split():
-            table[unit] = delta
-
-    return table
-
-_parse_interval_table = _parse_interval_table()
-_parse_interval_re = re.compile(
-    r"[\s,]*"
-    r"([-+]?(?:\d\d?:\d\d?(?::\d\d?)?(?:\.\d+)?"
-    r"|\d+(?:\.\d+)?))"
-    r"[\s,]*"
-)
-
-
-def _parse_interval(interval):
-    result = timedelta(0)
-    value = None
-    for token in _parse_interval_re.split(interval):
-        if not token:
-            pass
-        elif ":" in token:
-            if value is not None:
-                result += timedelta(days=value)
-                value = None
-            h, m, s, ms = _parse_time(token)
-            result += timedelta(hours=h, minutes=m, seconds=s, microseconds=ms)
-        elif value is None:
-            try:
-                value = float(token)
-            except ValueError:
-                raise ValueError("Expected an interval value rather than "
-                                 "%r in interval %r" % (token, interval))
-        else:
-            unit = _parse_interval_table.get(token)
-            if unit is None:
-                raise ValueError("Unsupported interval unit %r in interval %r"
-                                 % (token, interval))
-            result += unit(value)
-            value = None
-    if value is not None:
-        result += timedelta(seconds=value)
-
-    return result
