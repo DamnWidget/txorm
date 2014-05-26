@@ -36,14 +36,36 @@
 
 /* Definitions */
 static PyObject *Undef = NULL;
+static PyObject *raise_none_error = NULL;
+static PyObject *SQLRaw = NULL;
+static PyObject *SQLToken = NULL;
+static PyObject *State = NULL;
+static PyObject *CompileError = NULL;
+static PyObject *parenthesis_format = NULL;
+static PyObject *default_compile_join = NULL;
 
+/* Varaible */
 typedef struct {
     PyObject_HEAD
     PyObject *_value;
     PyObject *_allow_none;
     PyObject *_validator;
-    PyObject *column;
+    PyObject *field;
 } VariableObject;
+
+/* Compile */
+typedef struct {
+    PyObject_HEAD
+    PyObject *__weakreflist;
+    PyObject *_local_dispatch_table;
+    PyObject *_local_precedence;
+    PyObject *_local_reserved_words;
+    PyObject *_dispatch_table;
+    PyObject *_precedence;
+    PyObject *_reserved_words;
+    PyObject *_children;
+    PyObject *_parents;
+} CompileObject;
 
 /* Initialization */
 static int
@@ -75,9 +97,40 @@ initialize_globals(void)
     Py_DECREF(module);
 
     /* Import objects from txorm.variables package */
-    module = PyImport_ImportModule("txorm.variable");
+    module = PyImport_ImportModule("txorm.variable.base");
     if (!module)
         return 0;
+
+    raise_none_error = PyObject_GetAttrString(module, "raise_none_error");
+    if (!raise_none_error)
+        return 0;
+
+    Py_DECREF(module);
+
+    /* Import objects from txorm.compiler package */
+    module = PyImport_ImportModule("txorm.compiler.state");
+    if (!module)
+        return 0;
+
+    State = PyObject_GetAttrString(module, "State");
+    if (!State)
+        return 0;
+
+    Py_DECREF(module);
+
+    module = PyImport_ImportModule("txorm.compiler.base");
+    if (!module)
+        return 0;
+
+    CompileError = PyObject_GetAttrString(module, "CompileError");
+    if (!CompileError)
+        return 0;
+
+    Py_DECREF(module);
+
+    /* fast path frequently used objects */
+    parenthesis_format = PyUnicode_DecodeASCII("(%s)", 4, "strict");
+    default_compile_join = PyUnicode_DecodeASCII(", ", 2, "strict");
 
     initialized = 1;
     return initialized;

@@ -28,6 +28,7 @@ def get_txorm_version():
     return txorm_ver.strip()
 
 _variable = Extension('txorm._variable', sources=['txorm/_variable.c'])
+_compiler = Extension('txorm._compiler', sources=['txorm/_compiler.c'])
 
 setup(
     name='txorm',
@@ -38,7 +39,7 @@ setup(
     maintainer='TxORM Developers',
     license='LGPL',
     packages=find_packages(),
-    ext_modules=[_variable],
+    ext_modules=[_variable, _compiler],
     tests_require=['twisted>=10.2.0'],
     install_requires=['twisted>=10.2.0'],
     requires=['twisted(>=10.2.0)', 'zope.component'],
