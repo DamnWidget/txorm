@@ -2,18 +2,20 @@
 # Copyright (c) 2014 Oscar Campos <oscar.campos@member.fsf.org>
 # See LICENSE for details
 
-'''TxORM Variable Unit Tests
-'''
+"""TxORM Variable Unit Tests
+"""
 
+import uuid
 from decimal import Decimal
 from fractions import Fraction
 from datetime import datetime, date, time, timedelta
 
 from twisted.trial import unittest
 
-from txorm import Undef
 from txorm.variable import *
 from txorm.compat import _PY3, b, u
+from txorm.exceptions import NoneError
+from txorm.compiler.fields import Field
 from txorm.utils.tz import tzutc, tzoffset
 
 if _PY3 is True:
@@ -42,7 +44,7 @@ class DummyVariable(Variable):
         return 's', variable
 
 
-class VaraibleTest(unittest.TestCase):
+class VariableTest(unittest.TestCase):
 
     def test_constructor_value(self):
         variable = DummyVariable(marker)
@@ -60,9 +62,9 @@ class VaraibleTest(unittest.TestCase):
         variable = DummyVariable(value_factory=lambda: marker, from_db=True)
         self.assertEqual(variable.sets, [(marker, True)])
 
-    def test_constructor_column(self):
-        variable = DummyVariable(column=marker)
-        self.assertEqual(variable.column, marker)
+    def test_constructor_field(self):
+        variable = DummyVariable(field=marker)
+        self.assertEqual(variable.field, marker)
 
     def test_get_default(self):
         variable = DummyVariable()
@@ -106,16 +108,19 @@ class VaraibleTest(unittest.TestCase):
 
     def test_set_none_without_allow_none(self):
         variable = DummyVariable(allow_none=False)
-        self.assertRaises(TypeError, variable.set, None)
+        self.assertRaises(NoneError, variable.set, None)
 
-    # def test_set_none_without_allow_none_and_column(self):
-    #     column = Column('colun_name')
-    #     variable = DummyVariable(allow_none=False, column=column)
-    #     try:
-    #         variable.set(None)
-    #     except TypeError as error:
-    #         pass
-    #     self.assertTrue('column_name' in str(error))
+    def test_set_none_without_allow_none_and_column(self):
+        p = None
+        field = Field('field_name')
+        variable = DummyVariable(allow_none=False, field=field)
+        try:
+            variable.set(None)
+            print('Pollas')
+        except NoneError as error:
+            p = error
+
+        self.assertTrue('field_name' in str(p))
 
     def test_set_with_validator(self):
         args = []
@@ -515,3 +520,80 @@ class TimeDeltaVariableTest(unittest.TestCase):
 
         self.assertRaises(ValueError, variable.set, '42 months', from_db=True)
         self.assertRaises(ValueError, variable.set, '42 years', from_db=True)
+
+
+class UUIDVariableTest(unittest.TestCase):
+
+    def test_get_set(self):
+        value = uuid.UUID('{0609f76b-878f-4546-baf5-c1b135e8de72}')
+
+        variable = UUIDVariable()
+
+        variable.set(value)
+        self.assertEquals(variable.get(), value)
+        self.assertEquals(
+            variable.get(to_db=True), '0609f76b-878f-4546-baf5-c1b135e8de72')
+
+        self.assertRaises(TypeError, variable.set, marker)
+        self.assertRaises(TypeError, variable.set,
+                          '0609f76b-878f-4546-baf5-c1b135e8de72')
+        self.assertRaises(TypeError, variable.set,
+                          u('0609f76b-878f-4546-baf5-c1b135e8de72'))
+
+    def test_get_set_from_database(self):
+        value = uuid.UUID("{0609f76b-878f-4546-baf5-c1b135e8de72}")
+
+        variable = UUIDVariable()
+
+        # Strings and UUID objects are accepted from the database.
+        variable.set(value, from_db=True)
+        self.assertEquals(variable.get(), value)
+        variable.set('0609f76b-878f-4546-baf5-c1b135e8de72', from_db=True)
+        self.assertEquals(variable.get(), value)
+        variable.set(u('0609f76b-878f-4546-baf5-c1b135e8de72'), from_db=True)
+        self.assertEquals(variable.get(), value)
+
+        # Some other representations for UUID values.
+        variable.set('{0609f76b-878f-4546-baf5-c1b135e8de72}', from_db=True)
+        self.assertEquals(variable.get(), value)
+        variable.set('0609f76b878f4546baf5c1b135e8de72', from_db=True)
+        self.assertEquals(variable.get(), value)
+
+
+class MysqlEnumVariableTest(unittest.TestCase):
+
+    def test_set_get(self):
+        variable = MysqlEnumVariable({'foo', 'bar'})
+        variable.set('foo')
+        self.assertEquals(variable.get(), 'foo')
+        self.assertEquals(variable.get(to_db=True), u('foo'))
+        variable.set('bar', from_db=True)
+        self.assertEquals(variable.get(), 'bar')
+        self.assertEquals(variable.get(to_db=True), u('bar'))
+        self.assertRaises(ValueError, variable.set, 'foobar')
+        self.assertRaises(ValueError, variable.set, 2)
+
+
+class EnumVariableTest(unittest.TestCase):
+
+    def test_set_get(self):
+        variable = EnumVariable({1: 'foo', 2: 'bar'}, {'foo': 1, 'bar': 2})
+        variable.set('foo')
+        self.assertEquals(variable.get(), 'foo')
+        self.assertEquals(variable.get(to_db=True), 1)
+        variable.set(2, from_db=True)
+        self.assertEquals(variable.get(), 'bar')
+        self.assertEquals(variable.get(to_db=True), 2)
+        self.assertRaises(ValueError, variable.set, 'foobar')
+        self.assertRaises(ValueError, variable.set, 2)
+
+    def test_in_map(self):
+        variable = EnumVariable({1: 'foo', 2: 'bar'}, {'one': 1, 'two': 2})
+        variable.set('one')
+        self.assertEquals(variable.get(), 'foo')
+        self.assertEquals(variable.get(to_db=True), 1)
+        variable.set(2, from_db=True)
+        self.assertEquals(variable.get(), 'bar')
+        self.assertEquals(variable.get(to_db=True), 2)
+        self.assertRaises(ValueError, variable.set, 'foo')
+        self.assertRaises(ValueError, variable.set, 2)

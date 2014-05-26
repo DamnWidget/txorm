@@ -4,8 +4,7 @@
 
 from __future__ import unicode_literals
 
-import re
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from txorm.compat import _PYPY
 from txorm import c_extensions_available

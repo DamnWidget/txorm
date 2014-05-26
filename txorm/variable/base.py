@@ -6,9 +6,25 @@ from __future__ import unicode_literals
 
 from txorm import Undef
 from txorm.compat import _PY3
+from txorm.exceptions import NoneError
 
 if _PY3 is True:
     buffer = memoryview
+
+
+def raise_none_error(field):
+    if not field:
+        raise NoneError('None isn\'t acceptable as a value')
+    else:
+        from txorm.compiler import compile, CompileError
+        name = field.name
+        if field.table is not Undef:
+            try:
+                table = compile(field.table)
+                name = '{}.{}'.format(table, name)
+            except CompileError:
+                pass
+        raise NoneError("None isn't acceptable as a value for %s" % name)
 
 
 class Variable(object):
@@ -19,8 +35,8 @@ class Variable(object):
     :type value_factory: callable
     :param allow_none: if `True` allow `None` as a valid value to this var
     :type allow_none: boolean
-    :param column: the real column name in the database if mapping is needed
-    :type column: string
+    :param field: the real field name in the database if mapping is needed
+    :type field: string
     :param validator: callable object that will be used whenever we try to
         set the variable to a non-db value (that doesn't comes from the
         database). The function signature wil be as described:
@@ -38,10 +54,10 @@ class Variable(object):
     _allow_none = True
     _validator = None
 
-    column = None
+    field = None
 
     def __init__(self, value=Undef, value_factory=Undef,
-                 from_db=False, allow_none=True, column=None, validator=None):
+                 from_db=False, allow_none=True, field=None, validator=None):
 
         if allow_none is not True:
             self._allow_none = False
@@ -54,7 +70,7 @@ class Variable(object):
         if validator is not None:
             self._validator = validator
 
-        self.column = column
+        self.field = field
 
     @property
     def is_defined(self):
@@ -98,7 +114,7 @@ class Variable(object):
 
         if value is None:
             if self._allow_none is False:
-                raise TypeError('None is not an acceptable value')
+                raise raise_none_error(self.field)
             new_value = None
         else:
             new_value = self.parse_set(value, from_db)

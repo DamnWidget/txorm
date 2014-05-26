@@ -7,9 +7,8 @@ from __future__ import unicode_literals
 import re
 from datetime import timedelta
 
-from txorm.compat import _PYPY
 from txorm import c_extensions_available
-from txorm.compat import binary_type, text_type
+from txorm.compat import _PYPY, binary_type, text_type
 
 if not _PYPY and c_extensions_available:
     try:
@@ -23,6 +22,9 @@ from ._datetime import _parse_time
 
 
 class TimeDeltaVariable(Variable):
+    """Representation of a time delta variable
+    """
+
     __slots__ = ()
 
     def parse_set(self, value, from_db):
@@ -48,12 +50,12 @@ class TimeDeltaVariable(Variable):
 def _parse_interval_table():
     table = {}
     for units, delta in (
-        ("d day days", timedelta),
-        ("h hour hours", lambda x: timedelta(hours=x)),
-        ("m min minute minutes", lambda x: timedelta(minutes=x)),
-        ("s sec second seconds", lambda x: timedelta(seconds=x)),
-        ("ms millisecond milliseconds", lambda x: timedelta(milliseconds=x)),
-        ("microsecond microseconds", lambda x: timedelta(microseconds=x))
+        ('d day days', timedelta),
+        ('h hour hours', lambda x: timedelta(hours=x)),
+        ('m min minute minutes', lambda x: timedelta(minutes=x)),
+        ('s sec second seconds', lambda x: timedelta(seconds=x)),
+        ('ms millisecond milliseconds', lambda x: timedelta(milliseconds=x)),
+        ('microsecond microseconds', lambda x: timedelta(microseconds=x))
     ):
         for unit in units.split():
             table[unit] = delta
@@ -62,10 +64,10 @@ def _parse_interval_table():
 
 _parse_interval_table = _parse_interval_table()
 _parse_interval_re = re.compile(
-    r"[\s,]*"
-    r"([-+]?(?:\d\d?:\d\d?(?::\d\d?)?(?:\.\d+)?"
-    r"|\d+(?:\.\d+)?))"
-    r"[\s,]*"
+    r'[\s,]*'
+    r'([-+]?(?:\d\d?:\d\d?(?::\d\d?)?(?:\.\d+)?'
+    r'|\d+(?:\.\d+)?))'
+    r'[\s,]*'
 )
 
 
@@ -75,7 +77,7 @@ def _parse_interval(interval):
     for token in _parse_interval_re.split(interval):
         if not token:
             pass
-        elif ":" in token:
+        elif ':' in token:
             if value is not None:
                 result += timedelta(days=value)
                 value = None
@@ -85,12 +87,12 @@ def _parse_interval(interval):
             try:
                 value = float(token)
             except ValueError:
-                raise ValueError("Expected an interval value rather than "
-                                 "%r in interval %r" % (token, interval))
+                raise ValueError('Expected an interval value rather than '
+                                 '%r in interval %r' % (token, interval))
         else:
             unit = _parse_interval_table.get(token)
             if unit is None:
-                raise ValueError("Unsupported interval unit %r in interval %r"
+                raise ValueError('Unsupported interval unit %r in interval %r'
                                  % (token, interval))
             result += unit(value)
             value = None

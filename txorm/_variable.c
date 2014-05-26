@@ -15,7 +15,7 @@
         _allow_none = True
         _validator = None
 
-        column = None
+        field = None
 */
 static PyObject *
 Variable_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
@@ -33,20 +33,20 @@ Variable_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     Py_INCREF(Py_None);
     self->_validator = Py_None;
     Py_INCREF(Py_None);
-    self->column = Py_None;
+    self->field = Py_None;
 
     return (PyObject *)self;
 }
 
 /*
     def __init__(self, value=Undef, value_factory=Undef,
-                 from_db=False, allow_none=True, column=None, validator=None):
+                 from_db=False, allow_none=True, field=None, validator=None):
  */
 static int
 Variable_init(VariableObject *self, PyObject *args, PyObject *kwargs)
 {
     static char *kwlist[] = {
-        "value", "value_factory", "from_db", "allow_none", "column",
+        "value", "value_factory", "from_db", "allow_none", "field",
         "validator", NULL
     };
 
@@ -54,13 +54,13 @@ Variable_init(VariableObject *self, PyObject *args, PyObject *kwargs)
     PyObject *value_factory = Undef;
     PyObject *from_db = Py_False;
     PyObject *allow_none = Py_True;
-    PyObject *column = Py_None;
+    PyObject *field = Py_None;
     PyObject *validator = Py_None;
     PyObject *tmp;
 
     if (!PyArg_ParseTupleAndKeywords(
             args, kwargs, "|OOOOOO", kwlist, &value, &value_factory, &from_db,
-            &allow_none, &column, &validator))
+            &allow_none, &field, &validator))
         return -1;
 
     /* if allow_none is not True: */
@@ -95,10 +95,10 @@ Variable_init(VariableObject *self, PyObject *args, PyObject *kwargs)
         self->_validator = validator;
     }
 
-    /* self.column = column */
-    Py_DECREF(self->column);
-    Py_INCREF(column);
-    self->column = column;
+    /* self.field = field */
+    Py_DECREF(self->field);
+    Py_INCREF(field);
+    self->field = field;
 
     return 0;
 
@@ -117,7 +117,7 @@ Variable_traverse(VariableObject *self, visitproc visit, void *arg)
     Py_VISIT(self->_value);
     Py_VISIT(self->_allow_none);
     // Py_VISIT(self->_validator);
-    Py_VISIT(self->column);
+    Py_VISIT(self->field);
     return 0;
 }
 
@@ -127,7 +127,7 @@ Variable_clear(VariableObject *self)
     Py_CLEAR(self->_value);
     Py_CLEAR(self->_allow_none);
     Py_CLEAR(self->_validator);
-    Py_CLEAR(self->column);
+    Py_CLEAR(self->field);
     return 0;
 }
 
@@ -212,6 +212,7 @@ Variable_set(VariableObject *self, PyObject *args, PyObject *kwargs)
     PyObject *value = Py_None;
     PyObject *from_db = Py_False;
     PyObject *new_value = Py_None;
+    PyObject *tmp;
 
     if (!PyArg_ParseTupleAndKeywords(
         args, kwargs, "|OO:set", kwlist, &value, &from_db))
@@ -230,10 +231,13 @@ Variable_set(VariableObject *self, PyObject *args, PyObject *kwargs)
     if (value == Py_None) {
         /* if self._allow_none is False */
         if (!PyObject_IsTrue(self->_allow_none)) {
-            /*  raise TypeError('None is not an acceptable value') */
-            PyErr_SetString(
-                PyExc_TypeError, "None is not an acceptable value");
-            return NULL;
+            /*  raise raise_none_error(self.field) */
+            tmp = PyObject_CallFunctionObjArgs(
+                raise_none_error, self->field, NULL
+            );
+
+            Py_XDECREF(tmp);
+            goto error;
         }
         /*  new_value = None */
         Py_INCREF(Py_None);
@@ -307,7 +311,7 @@ static PyMethodDef Variable_methods[] = {
 static PyMemberDef Variable_members[] = {
     {"_value", T_OBJECT, offsetof(VariableObject, _value), 0, 0},
     {"_allow_none", T_OBJECT, offsetof(VariableObject, _allow_none), 0, 0},
-    {"column", T_OBJECT, offsetof(VariableObject, column), 0, 0},
+    {"field", T_OBJECT, offsetof(VariableObject, field), 0, 0},
     {NULL}  /* sentinel */
 };
 
