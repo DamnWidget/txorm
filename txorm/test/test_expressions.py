@@ -10,13 +10,23 @@ from __future__ import unicode_literals
 from twisted.trial import unittest
 
 from txorm import Undef
+from txorm.compat import _PY3, b
+from txorm.variable import Variable
+from txorm.compiler.fields import Field
 from txorm.compiler.plain_sql import SQLToken
+from txorm.compiler.comparable import And, Or, Func
 from txorm.compiler.expressions import Select, Insert, Update, Delete
 
-# create elemN dinamyc variables
-for i in range(10):
-    name = 'elem'
-    exec('{name}{i} = SQLToken("{name}{i}".encode())'.format(name=name, i=i))
+# I don't like dynamic variables because the linter give me fake possitives
+elem1 = SQLToken('elem1' if not _PY3 else b('elem1'))
+elem2 = SQLToken('elem2' if not _PY3 else b('elem2'))
+elem3 = SQLToken('elem3' if not _PY3 else b('elem3'))
+elem4 = SQLToken('elem4' if not _PY3 else b('elem4'))
+elem5 = SQLToken('elem5' if not _PY3 else b('elem5'))
+elem6 = SQLToken('elem6' if not _PY3 else b('elem6'))
+elem7 = SQLToken('elem7' if not _PY3 else b('elem7'))
+elem8 = SQLToken('elem8' if not _PY3 else b('elem8'))
+elem9 = SQLToken('elem9' if not _PY3 else b('elem9'))
 
 
 class ExpressionsTest(unittest.TestCase):
@@ -93,6 +103,36 @@ class ExpressionsTest(unittest.TestCase):
     def test_delete_constructor(self):
         objects = [object() for i in range(3)]
         expression = Delete(**dict(zip(Delete.__slots__, objects)))
-        self.assertEquals(expression.where, objects[0])
-        self.assertEquals(expression.table, objects[1])
-        self.assertEquals(expression.default_table, objects[2])
+        self.assertEqual(expression.where, objects[0])
+        self.assertEqual(expression.table, objects[1])
+        self.assertEqual(expression.default_table, objects[2])
+
+    def test_and(self):
+        expression = And(elem1, elem2, elem3)
+        self.assertEqual(expression.expressions, (elem1, elem2, elem3))
+
+    def test_or(self):
+        expression = Or(elem1, elem2, elem3)
+        self.assertEqual(expression.expressions, (elem1, elem2, elem3))
+
+    def test_field_default(self):
+        expression = Field()
+        self.assertEqual(expression.name, Undef)
+        self.assertEqual(expression.table, Undef)
+        self.assertEqual(expression.compile_cache, None)
+        self.assertTrue(expression.primary is 0)
+        self.assertEqual(expression.variable_factory, Variable)
+
+    def test_field_constructor(self):
+        objects = [object() for i in range(3)]
+        objects.insert(2, True)
+        expression = Field(**dict(zip(Field.__slots__, objects)))
+        self.assertEqual(expression.name, objects[0])
+        self.assertEqual(expression.table, objects[1])
+        self.assertTrue(expression.primary is 1)
+        self.assertEqual(expression.variable_factory, objects[3])
+
+    def test_func(self):
+        expression = Func('dafunc', elem1, elem2)
+        self.assertEqual(expression.name, 'dafunc')
+        self.assertEqual(expression.args, (elem1, elem2))

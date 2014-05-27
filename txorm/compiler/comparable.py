@@ -176,7 +176,7 @@ class CompoundExpression(ComparableExpression):
 
     __slots__ = ('expressions',)
 
-    def __init__(self, expressions):
+    def __init__(self, *expressions):
         self.expressions = expressions
 
 
@@ -334,6 +334,7 @@ class Or(CompoundOperator):
 class FuncExpression(ComparableExpression):
     __slots__ = ()
     name = '(unknown)'
+
 
 class Func(FuncExpression):
     """Func mixin used in compiling decorators
