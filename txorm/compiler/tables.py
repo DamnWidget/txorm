@@ -44,6 +44,7 @@ class JoinExpression(FromExpression):
         else:
             self.left = Undef
             self.right = arg1
+            self.on = arg2
             if on is not Undef:
                 raise ExpressionError(
                     'Improper join arguments: ({!r}, {!r}, {!r})'.format(

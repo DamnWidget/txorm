@@ -6,8 +6,8 @@ from __future__ import unicode_literals
 
 from txorm import Undef
 from .prefixes import Neg
-from txorm.compat import u
 from txorm.variable import Variable
+from txorm.compat import u, text_type
 from .expressions import ExpressionError, Expression
 
 
@@ -124,7 +124,7 @@ class Comparable(object):
         return Upper(self)
 
     def startswith(self, prefix):
-        if not isinstance(prefix, unicode):
+        if not isinstance(prefix, text_type):
             raise ExpressionError('Expected unicode argument, got {!r}'.format(
                 type(prefix)
             ))
@@ -132,7 +132,7 @@ class Comparable(object):
         return Like(self, pattern, u('!'))
 
     def endswith(self, suffix):
-        if not isinstance(suffix, unicode):
+        if not isinstance(suffix, text_type):
             raise ExpressionError('Expected unicode argument, got {!r}'.format(
                 type(suffix)
             ))
@@ -140,7 +140,7 @@ class Comparable(object):
         return Like(self, pattern, u('!'))
 
     def contains_string(self, substring):
-        if not isinstance(substring, unicode):
+        if not isinstance(substring, text_type):
             raise ExpressionError('Expected unicode argument, got {}'.format(
                 type(substring)
             ))
@@ -161,11 +161,10 @@ class BinaryExpression(ComparableExpression):
     :param expression2: the second expression to compare
     """
 
-    __slots__ = ('expression1', 'expression2')
+    __slots__ = ('expressions')
 
     def __init__(self, expression1, expression2):
-        self.expression1 = expression1
-        self.expression2 = expression2
+        self.expressions = (expression1, expression2)
 
 
 class CompoundExpression(ComparableExpression):
