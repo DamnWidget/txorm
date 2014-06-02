@@ -138,7 +138,7 @@ Compile__update_cache(CompileObject *self, PyObject *args)
     size = PyList_GET_SIZE(self->_parents);
     for (i = 0; i != size; i++) {
         CompileObject *parent = (CompileObject *)PyList_GET_ITEM(
-            self->_parents, 1
+            self->_parents, i
         );
         /* self._dispatch_table.update(parent._local_dispatch_table) */
         CATCH(-1, PyDict_Update(
@@ -301,7 +301,7 @@ error:
 static PyTypeObject Compile_Type;
 
 static PyObject *
-Compile_create_child(CompileObject *self)
+Compile_create_child(CompileObject *self, PyObject *args)
 {
     /* return self.__class__(parent=self) */
     return PyObject_CallFunctionObjArgs((PyObject*)Py_TYPE(self), self, NULL);
