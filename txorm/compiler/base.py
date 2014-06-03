@@ -7,7 +7,7 @@ from __future__ import unicode_literals
 from weakref import WeakKeyDictionary
 
 from txorm import c_extensions_available
-from txorm.compat import u, binary_type, text_type
+from txorm.compat import binary_type, text_type
 
 from .state import State
 from .plain_sql import SQLRaw, SQLToken
@@ -24,7 +24,15 @@ def _when(self, types):
     """Check Compile.when.
 
     That's defined here to make easier he C Implementation of the Compile
-    object
+    object.
+
+    .. note::
+
+        We could use here the new singledispatch decorator and it's backport
+        from Python 3.4.0 but we need more than just dispatch generic functions
+        from this decorator. For example we have to setup the precedence of
+        the operations so at the end of the day we need some custom way to
+        hook into he execution chain
     """
 
     def wrapper(func):
@@ -35,6 +43,19 @@ def _when(self, types):
         return func
 
     return wrapper
+
+
+class Context(object):
+    """
+    An object used to specify the nature of expected SQL expressions
+    being compiled in a given context.
+    """
+
+    def __init__(self, name):
+        self._name = name
+
+    def __repr__(self):
+        return '{}({!r})'.format(self.__class__.__name__, self._name)
 
 
 class Compile(object):
@@ -58,7 +79,7 @@ class Compile(object):
             self._update_cache()
 
     def __call__(self, expression, state=None,
-                 join=u(', '), raw=False, token=False):
+                 join=', ', raw=False, token=False):
         """Compile the given expression into a SQL statement
 
         :param expression: the expression to compile
@@ -170,7 +191,7 @@ class Compile(object):
         specific compilation strategies
         """
 
-        return self.__class__(parent=self)
+        return self.__class__(self)
 
     def get_precedence(self, expression_type):
         """Get the operators precedence of the given type
@@ -236,7 +257,8 @@ class Compile(object):
         self._precedence.update(self._local_precedence)
         self._reserved_words.update(self._local_reserved_words)
 
-        (child._update_cache() for child in self._children)
+        for child in self._children:
+            child._update_cache()
 
 
 if c_extensions_available is True:
@@ -265,34 +287,5 @@ class CompilePython(Compile):
         exec(code, namespace)
         return namespace['closure'](state.parameters, bool)
 
-
-compile = Compile()
-compile_python = CompilePython()
-
-compile.add_reserved_words(
-    """
-    absolute action add all allocate alter and any are as asc assertion at
-    authorization avg begin between bit bit_length both by cascade cascaded
-    case cast catalog char character char_ length character_length check close
-    coalesce collate collation column commit connect connection constraint
-    constraints continue convert corresponding count create cross current
-    current_date current_time current_timestamp current_ user cursor date day
-    deallocate dec decimal declare default deferrable deferred delete desc
-    describe descriptor diagnostics disconnect distinct domain double drop
-    else end end-exec escape except exception exec execute exists external
-    extract false fetch first float for foreign found from full get global go
-    goto grant group having hour identity immediate in indicator initially
-    inner input insensitive insert int integer intersect interval into is
-    isolation join key language last leading left level like local lower
-    match max min minute module month names national natural nchar next no
-    not null nullif numeric octet_length of on only open option or order
-    outer output overlaps pad partial position precision prepare preserve
-    primary prior privileges procedure public read real references relative
-    restrict revoke right rollback rows schema scroll second section select
-    session session_ user set size smallint some space sql sqlcode sqlerror
-    sqlstate substring sum system_user table temporary then time timestamp
-    timezone_ hour timezone_minute to trailing transaction translate
-    translation trim true union unique unknown update upper usage user using
-    value values varchar varying view when whenever where with work write
-    year zone
-    """.split())
+txorm_compile = Compile()
+txorm_compile_python = CompilePython()

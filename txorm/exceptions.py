@@ -10,11 +10,6 @@ class TxormError(Exception):
     """
 
 
-class CopileError(TxormError):
-    """Raised on compile errors
-    """
-
-
 class NoneError(TxormError):
     """Raised when None is not allowed for a variable value
     """

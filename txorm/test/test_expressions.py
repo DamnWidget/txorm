@@ -10,14 +10,18 @@ from __future__ import unicode_literals
 from twisted.trial import unittest
 
 from txorm import Undef
-from txorm.compat import _PY3, b, u
 from txorm.variable import Variable
-from txorm.compiler.fields import Field
-from txorm.compiler.tables import JoinExpression
-from txorm.compiler.plain_sql import SQLToken, SQL
-from txorm.compiler.expressions import ExpressionError, Expression
+from txorm.compiler.state import State
+from txorm.compiler.fields import Field, Alias
+from txorm.compiler.base import txorm_compile, Compile
+from txorm.compiler.tables import JoinExpression, Table
+from txorm.compiler.comparable import Add, Sub, Mul, Div
+from txorm.compiler.plain_sql import SQLRaw, SQLToken, SQL
+from txorm.compat import _PY3, b, u, binary_type, text_type
 from txorm.compiler.expressions import Select, Insert, Update, Delete
 from txorm.compiler.comparable import And, Or, Func, NamedFunc, Like, Eq
+from txorm.compiler.expressions import Union, Except, Intersect, Sequence
+from txorm.compiler.expressions import ExpressionError, Expression, AutoTables
 
 
 class ExpressionsTest(unittest.TestCase):
@@ -229,6 +233,264 @@ class ExpressionsTest(unittest.TestCase):
         self.assertEqual(expression.left, Undef)
         self.assertEqual(expression.on, on)
 
+    def test_join_expression_on_invalid(self):
+        on = Expression()
+        self.assertRaises(ExpressionError, JoinExpression, None, on, None)
+
+    def test_join_expression_right_left(self):
+        objects = [object() for i in range(2)]
+        expression = JoinExpression(*objects)
+        self.assertEqual(expression.left, objects[0])
+        self.assertEqual(expression.right, objects[1])
+        self.assertEqual(expression.on, Undef)
+
+    def test_join_expression_right_left_on(self):
+        objects = [object() for i in range(3)]
+        expression = JoinExpression(*objects)
+        self.assertEqual(expression.left, objects[0])
+        self.assertEqual(expression.right, objects[1])
+        self.assertEqual(expression.on, objects[2])
+
+    def test_join_expression_right_join(self):
+        join = JoinExpression(None)
+        expression = JoinExpression(None, join)
+        self.assertEqual(expression.right, join)
+        self.assertEqual(expression.left, None)
+        self.assertEqual(expression.on, Undef)
+
+    def test_table(self):
+        objects = [object() for i in range(1)]
+        expression = Table(*objects)
+        self.assertEqual(expression.name, objects[0])
+
+    def test_alias_default(self):
+        expression = Alias(None)
+        self.assertEqual(expression.expression, None)
+        self.assertTrue(isinstance(expression.name, text_type))
+
+    def test_alias_constructor(self):
+        objects = [object() for i in range(2)]
+        expression = Alias(*objects)
+        self.assertEqual(expression.expression, objects[0])
+        self.assertEqual(expression.name, objects[1])
+
+    def test_union(self):
+        expression = Union(elem1, elem2, elem3)
+        self.assertEqual(expression.expressions, (elem1, elem2, elem3))
+
+    def test_union_with_kwargs(self):
+        expression = Union(
+            elem1, elem2, all=True, order_by=(), limit=1, offset=2
+        )
+        self.assertEqual(expression.expressions, (elem1, elem2))
+        self.assertEqual(expression.all, True)
+        self.assertEqual(expression.order_by, ())
+        self.assertEqual(expression.limit, 1)
+        self.assertEqual(expression.offset, 2)
+
+    def test_union_collapse(self):
+        expression = Union(Union(elem1, elem2), elem3)
+        self.assertEqual(expression.expressions, (elem1, elem2, elem3))
+
+        # only first expression is collapsed
+        expression = Union(elem1, Union(elem2, elem3))
+        self.assertEqual(expression.expressions[0], elem1)
+        self.assertTrue(isinstance(expression.expressions[1], Union))
+
+        # don't collapse if all is different
+        expression = Union(Union(elem1, elem2, all=True), elem3)
+        self.assertTrue(isinstance(expression.expressions[0], Union))
+        expression = Union(Union(elem1, elem2), elem3, all=True)
+        self.assertTrue(isinstance(expression.expressions[0], Union))
+        expression = Union(Union(elem1, elem2, all=True), elem3, all=True)
+        self.assertEqual(expression.expressions, (elem1, elem2, elem3))
+
+        # don't collapse if limit or offset are set
+        expression = Union(Union(elem1, elem2, limit=1), elem3)
+        self.assertTrue(isinstance(expression.expressions[0], Union))
+        expression = Union(Union(elem1, elem2, offset=3), elem3)
+        self.assertTrue(isinstance(expression.expressions[0], Union))
+
+        # don't collapse other set expressions
+        expression = Union(Except(elem1, elem2), elem3)
+        self.assertTrue(isinstance(expression.expressions[0], Except))
+        expression = Union(Intersect(elem1, elem2), elem3)
+        self.assertTrue(isinstance(expression.expressions[0], Intersect))
+
+    def test_except(self):
+        expression = Except(elem1, elem2, elem3)
+        self.assertEqual(expression.expressions, (elem1, elem2, elem3))
+
+    def test_except_with_kwargs(self):
+        expression = Except(
+            elem1, elem2, all=True, order_by=(), limit=1, offset=2
+        )
+        self.assertEqual(expression.expressions, (elem1, elem2))
+        self.assertEqual(expression.all, True)
+        self.assertEqual(expression.order_by, ())
+        self.assertEqual(expression.limit, 1)
+        self.assertEqual(expression.offset, 2)
+
+    def test_except_collapse(self):
+        expression = Except(Except(elem1, elem2), elem3)
+        self.assertEqual(expression.expressions, (elem1, elem2, elem3))
+
+        # only first expression is collapsed
+        expression = Except(elem1, Except(elem2, elem3))
+        self.assertEqual(expression.expressions[0], elem1)
+        self.assertTrue(isinstance(expression.expressions[1], Except))
+
+        # don't collapse if all is different
+        expression = Except(Except(elem1, elem2, all=True), elem3)
+        self.assertTrue(isinstance(expression.expressions[0], Except))
+        expression = Except(Except(elem1, elem2), elem3, all=True)
+        self.assertTrue(isinstance(expression.expressions[0], Except))
+        expression = Except(Except(elem1, elem2, all=True), elem3, all=True)
+        self.assertEqual(expression.expressions, (elem1, elem2, elem3))
+
+        # don't collapse if limit or offset are set
+        expression = Except(Except(elem1, elem2, limit=1), elem3)
+        self.assertTrue(isinstance(expression.expressions[0], Except))
+        expression = Except(Except(elem1, elem2, offset=3), elem3)
+        self.assertTrue(isinstance(expression.expressions[0], Except))
+
+        # don't collapse other set expressions
+        expression = Except(Union(elem1, elem2), elem3)
+        self.assertTrue(isinstance(expression.expressions[0], Union))
+        expression = Except(Intersect(elem1, elem2), elem3)
+        self.assertTrue(isinstance(expression.expressions[0], Intersect))
+
+    def test_intersect(self):
+        expression = Intersect(elem1, elem2, elem3)
+        self.assertEqual(expression.expressions, (elem1, elem2, elem3))
+
+    def test_intersect_with_kwargs(self):
+        expression = Intersect(
+            elem1, elem2, all=True, order_by=(), limit=1, offset=2
+        )
+        self.assertEqual(expression.expressions, (elem1, elem2))
+        self.assertEqual(expression.all, True)
+        self.assertEqual(expression.order_by, ())
+        self.assertEqual(expression.limit, 1)
+        self.assertEqual(expression.offset, 2)
+
+    def test_intersect_collapse(self):
+        expression = Intersect(Intersect(elem1, elem2), elem3)
+        self.assertEqual(expression.expressions, (elem1, elem2, elem3))
+
+        # only first expression is collapsed
+        expression = Intersect(elem1, Intersect(elem2, elem3))
+        self.assertEqual(expression.expressions[0], elem1)
+        self.assertTrue(isinstance(expression.expressions[1], Intersect))
+
+        # don't collapse if all is different
+        expression = Intersect(Intersect(elem1, elem2, all=True), elem3)
+        self.assertTrue(isinstance(expression.expressions[0], Intersect))
+        expression = Intersect(Intersect(elem1, elem2), elem3, all=True)
+        self.assertTrue(isinstance(expression.expressions[0], Intersect))
+        expression = Intersect(
+            Intersect(elem1, elem2, all=True), elem3, all=True)
+        self.assertEqual(expression.expressions, (elem1, elem2, elem3))
+
+        # don't collapse if limit or offset are set
+        expression = Intersect(Intersect(elem1, elem2, limit=1), elem3)
+        self.assertTrue(isinstance(expression.expressions[0], Intersect))
+        expression = Intersect(Intersect(elem1, elem2, offset=3), elem3)
+        self.assertTrue(isinstance(expression.expressions[0], Intersect))
+
+        # don't collapse other set expressions
+        expression = Intersect(Union(elem1, elem2), elem3)
+        self.assertTrue(isinstance(expression.expressions[0], Union))
+        expression = Intersect(Except(elem1, elem2), elem3)
+        self.assertTrue(isinstance(expression.expressions[0], Except))
+
+    def test_auto_tables(self):
+        expression = AutoTables(elem1, (elem2,))
+        self.assertEqual(expression.expression, elem1)
+        self.assertEqual(expression.tables, (elem2,))
+
+    def test_sequence(self):
+        expression = Sequence(elem1)
+        self.assertEqual(expression.name, elem1)
+
+
+class StateTest(unittest.TestCase):
+
+    def setUp(self):
+        self.state = State()
+
+    def test_attributes(self):
+        self.assertEqual(self.state.parameters, [])
+        self.assertEqual(self.state.auto_tables, [])
+        self.assertEqual(self.state.context, None)
+
+    def test_push_pop(self):
+        self.state.parameters.extend([1, 2])
+        self.state.push('parameters', [])
+        self.assertEqual(self.state.parameters, [])
+        self.state.pop()
+        self.assertEqual(self.state.parameters, [1, 2])
+        self.state.push('parameters')
+        self.assertEqual(self.state.parameters, [1, 2])
+        self.state.parameters.append(3)
+        self.assertEqual(self.state.parameters, [1, 2, 3])
+        self.state.pop()
+        self.assertEqual(self.state.parameters, [1, 2])
+
+    def test_push_pop_unexistent(self):
+        self.state.push('nonexistent')
+        self.assertEqual(self.state.nonexistent, None)
+        self.state.nonexistent = 'something'
+        self.state.pop()
+        self.assertEqual(self.state.nonexistent, None)
+
+
+class CompileTest(unittest.TestCase):
+
+    def test_simple_inheritance(self):
+        custom_compile = txorm_compile.create_child()
+        statement = custom_compile(Func1())
+        self.assertEqual(statement, 'func1()')
+
+    def test_customize(self):
+        custom_compile = txorm_compile.create_child()
+
+        @custom_compile.when(type(None))
+        def compile_none(compile, state, expression):
+            return 'None'
+
+        statement = custom_compile(Func1(None))
+        self.assertEqual(statement, 'func1(None)')
+
+    def test_customize_inheritance(self):
+        class C(object):
+            pass
+
+        compile_parent = Compile()
+        compile_child = compile_parent.create_child()
+
+        @compile_parent.when(C)
+        def compile_in_parent(compile, state, expression):
+            return 'parent'
+
+        statement = compile_child(C())
+        self.assertEqual(statement, 'parent')
+
+        @compile_child.when(C)
+        def compile_in_child(compile, state, expression):
+            print(state)
+            return 'child'
+
+        statement = compile_child(C())
+        self.assertEqual(statement, 'child')
+
+    def test_precedence(self):
+        expression = And(
+            e1, Or(e2, e3), Add(e4, Mul(e5, Sub(e6, Div(e7, Div(e8, e9)))))
+        )
+        statement = txorm_compile(expression)
+        self.assertEqual(statement, '1 AND (2 OR 3) AND 4+5*(6-7/(8/9))')
+
 
 # I don't like dynamic variables because the linter give me fake possitives
 elem1 = SQLToken('elem1' if not _PY3 else b('elem1'))
@@ -240,6 +502,16 @@ elem6 = SQLToken('elem6' if not _PY3 else b('elem6'))
 elem7 = SQLToken('elem7' if not _PY3 else b('elem7'))
 elem8 = SQLToken('elem8' if not _PY3 else b('elem8'))
 elem9 = SQLToken('elem9' if not _PY3 else b('elem9'))
+
+e1 = SQLRaw('1' if not _PY3 else b('1'))
+e2 = SQLRaw('2' if not _PY3 else b('2'))
+e3 = SQLRaw('3' if not _PY3 else b('3'))
+e4 = SQLRaw('4' if not _PY3 else b('4'))
+e5 = SQLRaw('5' if not _PY3 else b('5'))
+e6 = SQLRaw('6' if not _PY3 else b('6'))
+e7 = SQLRaw('7' if not _PY3 else b('7'))
+e8 = SQLRaw('8' if not _PY3 else b('8'))
+e9 = SQLRaw('9' if not _PY3 else b('9'))
 
 
 class Func1(NamedFunc):

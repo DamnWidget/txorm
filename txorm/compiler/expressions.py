@@ -150,11 +150,32 @@ class SetExpression(Expression):
                     and first.offset is Undef):
                 self._include_sub_expressions(first)
 
-        def _include_sub_expressions(self, expression):
-            """Include expression expressions as sub expressions
-            """
+    def _include_sub_expressions(self, expression):
+        """Include expression expressions as sub expressions
+        """
 
-            self.expressions = expression.expressions + self.expressions[1:]
+        self.expressions = expression.expressions + self.expressions[1:]
+
+
+class Union(SetExpression):
+    """Expression representing an Union clause
+    """
+    __slots__ = ()
+    operator = ' UNION '
+
+
+class Except(SetExpression):
+    """Expression representing an Except clause
+    """
+    __slots__ = ()
+    operator = ' EXCEPT '
+
+
+class Intersect(SetExpression):
+    """Expression representing an Insertsect clause
+    """
+    __slots__ = ()
+    operator = ' INTERSECT '
 
 
 class FromExpression(Expression):
@@ -187,3 +208,41 @@ class SuffixExpression(Expression):
 
     def __init__(self, expression):
         self.expression = expression
+
+
+class AutoTables(Expression):
+    """This class will inject one or more entries in state.auto_tables
+
+    If the param replace is set as True (False bu default),it will also
+    discard any auto_table entries injected by compiling the given expression
+    """
+
+    __slots__ = ('expression', 'tables', 'replace')
+
+    def __init__(self, expression, tables, replace=True):
+        assert type(tables) in (list, tuple)
+        self.expression = expression
+        self.tables = tables
+        self.replace = replace
+
+
+class Sequence(Expression):
+    """Expression representing auto-incrementing support from the databases
+
+    This should be translated into the *next* value of the named
+    auto-incrementing sequence. There's no standard way to compile a sequence,
+    since it's very database dependant.
+
+    Example of usage:
+
+    .. sourcecode:: python
+
+        classs Class(object):
+            (...)
+            id = Int(default=Sequence('sequence_name'))
+    """
+
+    __slots__ = ('name')
+
+    def __init__(self, name):
+        self.name = name

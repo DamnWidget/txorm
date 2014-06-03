@@ -5,8 +5,465 @@
 """TxORM Compiler
 """
 
-from .base import CompileError, Compile, compile
+from decimal import Decimal
+from collections import defaultdict
+from datetime import datetime, date, time, timedelta
+
+from txorm.compat import itervalues
+from txorm.compat import text_type, binary_type, integer_types, b, _PY3
+
+from txorm import Undef
+from .base import Context
+from .plain_sql import SQL
+from .expressions import Expression
+from .comparable import LShift, RShift
+from .comparable import Func, NamedFunc
+from .comparable import Add, Sub, Mul, Div, Mod
+from .expressions import Union, Except, Intersect
+from .expressions import Select, Insert, Update, Delete
+from .tables import Join, LeftJoin, RightJoin, JoinExpression
+from .comparable import Or, And, Eq, Ne, Gt, Ge, Lt, Le, Like, In
+from .tables import NaturalJoin, NaturalLeftJoin, NaturalRightJoin
+from .base import CompileError, Compile, txorm_compile, txorm_compile_python
+from .comparable import CompoundOperator, NonAssocBinaryOperator
+from txorm.variable import (
+    Variable, RawStrVariable, UnicodeVariable, DateTimeVariable,
+    DateVariable, TimeVariable, TimeDeltaVariable, BoolVariable,
+    IntVariable, DecimalVariable, FloatVariable
+)
+
+# expression contexts
+TABLE = Context('TABLE')
+EXPR = Context('EXPR')
+FIELD = Context('FIELD')
+FIELD_PREFIX = Context('FIELD_PREFIX')
+FIELD_NAME = Context('FIELD_NAME')
+SELECT = Context('SELECT')
+
+
+class NoTableError(CompileError):
+    """Raised when notable is avaibale on compile time
+    """
+
+
+# compile functions
+# the decorator builds the expressions disptach table
+@txorm_compile.when(binary_type)
+def compile_str(compile, expression, state):
+    """Compile a binary_type argument storing a valid value
+    """
+    state.parameters.append(RawStrVariable(expression))
+    return '?'
+
+
+@txorm_compile.when(text_type)
+def compile_text_type(compile, expression, state):
+    """Compile a text_type argument storing a valid value
+    """
+    state.parameters.append(UnicodeVariable(expression))
+    return '?'
+
+
+@txorm_compile.when(integer_types)
+def compile_int(compile, expression, state):
+    """Compile int and long (or int in Python3) argumnt storing a valid value
+    """
+    state.parameters.append(IntVariable(expression))
+    return '?'
+
+
+@txorm_compile.when(float)
+def compile_float(compile, expression, state):
+    """Compile a float argument storing a valid value
+    """
+    state.parameters.append(FloatVariable(expression))
+    return '?'
+
+
+@txorm_compile.when(Decimal)
+def compile_decimal(compile, expression, state):
+    """Compile a :class:`decimal.Decimal` argument storing a valid value
+    """
+    state.parameters.append(DecimalVariable(expression))
+    return '?'
+
+
+@txorm_compile.when(bool)
+def compile_bool(compile, expression, state):
+    """Compile a bool argument storing a valid value
+    """
+    state.parameters.append(BoolVariable(expression))
+    return '?'
+
+
+@txorm_compile.when(datetime)
+def compile_datetime(compile, expression, state):
+    """Compile a datetime argument storing a valid value
+    """
+    state.parameters.append(DateTimeVariable(expression))
+    return '?'
+
+
+@txorm_compile.when(date)
+def compile_date(compile, expression, state):
+    """Compile a date argument storing a valid value
+    """
+    state.parameters.append(DateVariable(expression))
+    return '?'
+
+
+@txorm_compile.when(time)
+def compile_time(compile, expression, state):
+    """Compile a time argument storing a valid value
+    """
+    state.parameters.append(TimeVariable(expression))
+    return '?'
+
+
+@txorm_compile.when(timedelta)
+def compile_timedelta(compile, expression, state):
+    """Compile a timedelta argument storing a valid value
+    """
+    state.parameters.append(TimeDeltaVariable(expression))
+    return '?'
+
+
+@txorm_compile.when(type(None))
+def compile_none(compile, expression, state):
+    """Compile None into NULL
+    """
+    return 'NULL'
+
+
+@txorm_compile_python.when(
+    float, type(None), text_type, binary_type, integer_types)
+def compile_python_builtin(compile, expression, state):
+    """Compile builting python (2 and 3) types into the right representation
+    """
+    return repr(expression)
+
+
+@txorm_compile_python.when(bool, datetime, date, time, timedelta)
+def compile_python_bool_and_dates(compile, expression, state):
+    """Compile python boolean and date/time types into right representation
+    """
+    index = len(state.parameters)
+    state.parameters.append(expression)
+    return '_{}'.format(index)
+
+
+@txorm_compile.when(Variable)
+def compile_variables(compile, variable, state):
+    """Compile any type of Variable argument storing a valid value
+    """
+    state.parameters.append(variable)
+    return '?'
+
+
+@txorm_compile_python.when(Variable)
+def compile_python_variable(compile, variable, state):
+    """Compile any other type of variable to the right representation
+    """
+    index = len(state.parameters)
+    state.parameters.append(variable.get())
+    return '_{}'.format(index)
+
+
+# compile expressions
+@txorm_compile_python.when(Expression)
+def compile_python_non_supported(compile, expression, state):
+    """Compile expressions into python is not supported
+    """
+    raise CompileError('Can not compile python expressions with {!r}'.format(
+        type(expression)
+    ))
+
+
+@txorm_compile.when(Select)
+def compile_select(compile, select, state):
+    """Compile a SELECT statement
+    """
+
+    tokens = ['SELECT']
+    state.push('auto_tables', [])
+    state.push('context', FIELD)
+
+    if select.distinct:
+        tokens.append('DISTINCT ')
+        if isinstance(select.distinct, (tuple, list)):
+            tokens.append('ON ({})'.format(
+                compile(select.distinct, state, raw=True))
+            )
+
+    tokens.append(compile(select.columns, state))
+    tables_pos = len(tokens)
+    parameters_pos = len(state.parameters)
+    state.context = EXPR
+
+    tlist = ('where', 'group_by', 'having', 'order_by', 'limit', 'offset')
+    for token in tlist:
+        if getattr(select, token, Undef) is not Undef:
+            tokens.append(' {} {}'.format(
+                token.upper(),
+                getattr(select, token) if token in ('offset', 'limit') else '')
+            )
+
+    if has_tables(state, select):
+        state.context = TABLE
+        state.push('parameters', [])
+        tokens.insert(tables_pos, ' FROM ')
+        tokens.insert(
+            tables_pos + 1, build_tables(
+                compile, select.tables, select.default_tables, state
+            )
+        )
+        parameters = state.parameters
+        state.pop()
+        state.parameters[parameters_pos:parameters_pos] = parameters
+    state.pop()
+    state.pop()
+
+    return ''.join(tokens)
+
+
+@txorm_compile.when(Insert)
+def compile_insert(compile, insert, state):
+    """Compile a INSERT statement
+    """
+
+    state.push('context', FIELD_NAME)
+    fields = compile(tuple(insert.map), state, token=True)
+    state.context = TABLE
+    table = build_tables(compile, insert.table, insert.default_tables, state)
+    state.context = EXPR
+    values = insert.values
+    if values is Undef:
+        values = [tuple(itervalues(insert.map))]
+
+    if isinstance(values, Expression):
+        compiled = compile(values, state)
+    else:
+        compiled = (
+            'VALUES ({})'.format(
+                '), ('.join(compile(value, state) for value in values)
+            )
+        )
+    state.pop()
+    return ''.join(['INSERT INTO', table, ' (', fields, ') ', compiled])
+
+
+@txorm_compile.when(Func, NamedFunc)
+def compile_func(compile, func, state):
+    """Compile a function or named function (like SUM, SUB, ADD...)
+    """
+
+    state.push('context', EXPR)
+    args = compile(func.args, state)
+    state.pop()
+    return '{}({})'.format(func.name, args)
+
+
+# comparables
+@txorm_compile.when(CompoundOperator)
+def compile_compound_operator(compile, expression, state):
+    """Compile common compound operators
+    """
+    return compile(expression.expressions, state, join=expression.operator)
+
+
+@txorm_compile_python.when(CompoundOperator)
+def compile_python_and_or(compile, expression, state):
+    """Compile and & or python statements
+    """
+    join = expression.operator.lower()
+    return compile(expression.expressions, state, join=join)
+
+
+@txorm_compile.when(And, Or)
+def compile_and_or(compile, expression, state):
+    """Compile compound operators AND & OR
+    """
+    join = expression.operator
+    return compile(expression.expressions, state, join=join, raw=True)
+
+
+@txorm_compile.when(NonAssocBinaryOperator)
+@txorm_compile_python.when(NonAssocBinaryOperator)
+def compile_non_assoc_binary_operator(compile, expression, state):
+    """Compile non binary asscicative operators like (Sub, Add, etc)
+    """
+
+    expression1 = compile(expression.expressions[0], state)
+    state.precedence += 0.5   # enforce parenthesis
+    expression2 = compile(expression.expressions[1], state)
+    return '{}{}{}'.format(expression1, expression.operator, expression2)
+
+
+# statement expressions
+def has_tables(state, expression):
+    """Determine if a given expression has tables
+    """
+    return (
+        expression.tables is not Undef
+        or expression.default_tables is not Undef
+        or state.auto_tables
+    )
+
+
+def build_tables(compile, tables, default_tables, state):
+    """Compile the given tables
+
+    Tables will be built from either `tables`, `default_tables` or
+    `state.auto_tables`.
+    """
+
+    tables = _parse_tables(tables, default_tables, state)
+
+    # single element
+    if type(tables) not in (list, tuple) or len(tables) == 1:
+        return txorm_compile(tables, state, token=True)
+
+    # coumpound element
+    return _compile_coumpound(compile, tables, state)
+
+
+def _compile_coumpound(compile, tables, state):
+    """Compile a coumpound expression
+    """
+
+    if _no_joins_in(tables):
+        if tables is state.auto_tables:
+            tables = set(compile(table, state, token=True) for table in tables)
+            return ', '.join(sorted(tables))
+
+        return compile(tables, state, token=True)
+
+    if tables is state.auto_tables:
+        statements = defaultdict(lambda: set())
+        # push a join_tables onto the state: compile calls below will populate
+        # this set so we can know whattables not to include
+        state.push('join_tables', set())
+
+        for elem in tables:
+            statement_name = 'table'
+            statement = compile(elem, state, token=True)
+            if isinstance(elem, JoinExpression):
+                statement_name = 'half_join' if elem.left is Undef else 'join'
+
+            statements[statement_name].add(statement)
+
+        # remove tables that were seen in join statements
+        statements['table'] -= state.join_tables
+        state.pop()  # remove the join_tables set from the state
+
+        result = ', '.join(
+            sorted(statements['table']) + sorted(statements['join'])
+        )
+        if statements['half']:
+            result = '{} {}'.format(
+                result, ' '.join(sorted(statements['half']))
+            )
+    else:
+        result = []
+        for elem in tables:
+            if len(result) > 0:
+                if isinstance(elem, JoinExpression) and elem.left is Undef:
+                    result.append(' ')
+                else:
+                    result.append(', ')
+
+            result.append(compile(elem, state, token=True))
+
+    return ''.join(result)
+
+
+def _parse_tables(tables, default_tables, state):
+    """
+    If `tables` is not `Undef`, it will be used.
+    If `tables` is `Undef` and `state.auto_tables` is available, that's used
+    instead. If neither `tables` nor `state.auto_tables` are available,
+    `default_tables` is tried as a last failback. If none of them are
+    available, `NoTableError` is raised
+    """
+
+    if tables is Undef:
+        if state.auto_tables:
+            tables = state.auto_tables
+        elif default_tables is not Undef:
+            tables = default_tables
+        else:
+            raise NoTableError('Could not find any tables')
+
+    return tables
+
+
+def _no_joins_in(tables):
+    """Return True is there is no Joins in the given expression tables
+    """
+
+    for table in tables:
+        if isinstance(table, JoinExpression):
+            return False
+
+    return True
+
+
+# set operator precedence
+txorm_compile.set_precedence(10, Select, Insert, Update, Delete)
+txorm_compile.set_precedence(10, Join, LeftJoin, RightJoin)
+txorm_compile.set_precedence(
+    10, NaturalJoin, NaturalLeftJoin, NaturalRightJoin)
+txorm_compile.set_precedence(10, Union, Except, Intersect)
+txorm_compile.set_precedence(20, SQL)
+txorm_compile.set_precedence(30, Or)
+txorm_compile.set_precedence(40, And)
+txorm_compile.set_precedence(50, Eq, Ne, Gt, Ge, Lt, Le, Like, In)
+txorm_compile.set_precedence(60, LShift, RShift)
+txorm_compile.set_precedence(70, Add, Sub)
+txorm_compile.set_precedence(80, Mul, Div, Mod)
+
+txorm_compile_python.set_precedence(10, Or)
+txorm_compile_python.set_precedence(20, And)
+txorm_compile_python.set_precedence(30, Eq, Ne, Gt, Ge, Lt, Le, Like, In)
+txorm_compile_python.set_precedence(40, LShift, RShift)
+txorm_compile_python.set_precedence(50, Add, Sub)
+txorm_compile_python.set_precedence(60, Mul, Div, Mod)
+
+# reserved words, from SQL1992
+
+txorm_compile.add_reserved_words(
+    """
+    absolute action add all allocate alter and any are as asc assertion at
+    authorization avg begin between bit bit_length both by cascade cascaded
+    case cast catalog char character char_ length character_length check close
+    coalesce collate collation column commit connect connection constraint
+    constraints continue convert corresponding count create cross current
+    current_date current_time current_timestamp current_ user cursor date day
+    deallocate dec decimal declare default deferrable deferred delete desc
+    describe descriptor diagnostics disconnect distinct domain double drop
+    else end end-exec escape except exception exec execute exists external
+    extract false fetch first float for foreign found from full get global go
+    goto grant group having hour identity immediate in indicator initially
+    inner input insensitive insert int integer intersect interval into is
+    isolation join key language last leading left level like local lower
+    match max min minute module month names national natural nchar next no
+    not null nullif numeric octet_length of on only open option or order
+    outer output overlaps pad partial position precision prepare preserve
+    primary prior privileges procedure public read real references relative
+    restrict revoke right rollback rows schema scroll second section select
+    session session_ user set size smallint some space sql sqlcode sqlerror
+    sqlstate substring sum system_user table temporary then time timestamp
+    timezone_ hour timezone_minute to trailing transaction translate
+    translation trim true union unique unknown update upper usage user using
+    value values varchar varying view when whenever where with work write
+    year zone
+    """.split())
+
 
 __all__ = [
-    'CompileError', 'Compile', 'compile'
+    'CompileError', 'Compile', 'txorm_compile', 'txorm_compile_python',
+    'SQL', 'LShift', 'RShift', 'Join', 'LeftJoin', 'RightJoin', 'NaturalJoin',
+    'NaturalLeftJoin', 'NaturalRightJoin', 'Union', 'Except', 'Intersect',
+    'Or', 'And', 'Eq', 'Ne', 'Gt', 'Ge', 'Lt', 'Le', 'Like', 'In', 'Mul',
+    'Div', 'Mod', 'Add', 'Sub', 'NoTableError'
 ]

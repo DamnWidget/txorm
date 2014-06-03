@@ -116,7 +116,6 @@ class VariableTest(unittest.TestCase):
         variable = DummyVariable(allow_none=False, field=field)
         try:
             variable.set(None)
-            print('Pollas')
         except NoneError as error:
             p = error
 

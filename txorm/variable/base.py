@@ -16,11 +16,11 @@ def raise_none_error(field):
     if not field:
         raise NoneError('None isn\'t acceptable as a value')
     else:
-        from txorm.compiler import compile, CompileError
+        from txorm.compiler import txorm_compile, CompileError
         name = field.name
         if field.table is not Undef:
             try:
-                table = compile(field.table)
+                table = txorm_compile(field.table)
                 name = '{}.{}'.format(table, name)
             except CompileError:
                 pass

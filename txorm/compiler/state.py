@@ -66,7 +66,7 @@ class State(object):
         return old_value
 
     def pop(self):
-        """Rever the topmost `push`
+        """Revert the topmost `push`
         """
 
         setattr(self, *self._stack.pop(-1))
