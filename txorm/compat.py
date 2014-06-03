@@ -55,4 +55,19 @@ def is_basestring(value):
         return isinstance(value, str)
 
 
-__all__ = ['b', 'json', 'pickle', 'StringIO', 'text_type', 'binary_type']
+def itervalues(d):
+    return iter(getattr(d, 'values' if _PY3 else 'itervalues')())
+
+
+def iterkeys(d):
+    return iter(getattr(d, 'keys' if _PY3 else 'iterkeys')())
+
+
+def iteritems(d):
+    return iter(getattr(d, 'items' if _PY3 else 'iteritems')())
+
+
+__all__ = [
+    'b', 'json', 'pickle', 'StringIO', 'text_type', 'binary_type',
+    'itervalues', 'iterkeys', 'iteritems'
+]
