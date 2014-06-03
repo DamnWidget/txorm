@@ -349,8 +349,8 @@ Compile_set_precedence(CompileObject *self, PyObject *args)
 
     /* for expression_type in expression_types: */
     precedence = PyTuple_GET_ITEM(args, 0);
-    for (i = 0; i != size; i++) {
-        PyObject *type = PyTuple_GET_ITEM(args, 1);
+    for (i = 1; i != size; i++) {
+        PyObject *type = PyTuple_GET_ITEM(args, i);
         /* self._local_precedence[expression_type] = precedence */
         CATCH(-1, PyDict_SetItem(self->_local_precedence, type, precedence));
     }
