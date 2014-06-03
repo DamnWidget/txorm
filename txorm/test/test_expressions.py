@@ -488,8 +488,15 @@ class CompileTest(unittest.TestCase):
         expression = And(
             e1, Or(e2, e3), Add(e4, Mul(e5, Sub(e6, Div(e7, Div(e8, e9)))))
         )
+
         statement = txorm_compile(expression)
         self.assertEqual(statement, '1 AND (2 OR 3) AND 4+5*(6-7/(8/9))')
+
+    def test_get_precedence(self):
+        c = txorm_compile
+        self.assertTrue(c.get_precedence(Or) < c.get_precedence(And))
+        self.assertTrue(c.get_precedence(Add) < c.get_precedence(Mul))
+        self.assertTrue(c.get_precedence(Sub) < c.get_precedence(Div))
 
 
 # I don't like dynamic variables because the linter give me fake possitives

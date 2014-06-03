@@ -290,7 +290,7 @@ def compile_and_or(compile, expression, state):
 @txorm_compile.when(NonAssocBinaryOperator)
 @txorm_compile_python.when(NonAssocBinaryOperator)
 def compile_non_assoc_binary_operator(compile, expression, state):
-    """Compile non binary asscicative operators like (Sub, Add, etc)
+    """Compile non binary associative operators like (Sub, Add, etc)
     """
 
     expression1 = compile(expression.expressions[0], state)
