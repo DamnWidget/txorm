@@ -118,6 +118,20 @@ initialize_globals(void)
 
     Py_DECREF(module);
 
+    module = PyImport_ImportModule("txorm.compiler.plain_sql");
+    if (!module)
+        return 0;
+
+    SQLRaw = PyObject_GetAttrString(module, "SQLRaw");
+    if (!SQLRaw)
+        return 0;
+
+    SQLToken = PyObject_GetAttrString(module, "SQLToken");
+    if (!SQLToken)
+        return 0;
+
+    Py_DECREF(module);
+
     module = PyImport_ImportModule("txorm.compiler.base");
     if (!module)
         return 0;
