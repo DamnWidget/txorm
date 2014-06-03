@@ -651,7 +651,7 @@ Compile__call__(CompileObject *self, PyObject *args, PyObject *kwargs)
 
     join = default_compile_join;
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|OSbb", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|OUbb", kwlist,
                                 &expression, &state, &join, &raw, &token)) {
         return NULL;
     }
