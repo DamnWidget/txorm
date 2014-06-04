@@ -5,7 +5,7 @@
 import re
 
 from txorm import Undef
-from txorm.compat import binary_type
+from txorm.compat import binary_type, text_type
 from .comparable import ComparableExpression
 
 
@@ -21,7 +21,7 @@ class SQL(ComparableExpression):
         self.tables = tables
 
 
-class SQLRaw(binary_type):
+class SQLRaw(text_type):
     """Used to mark a binary string as something that shouldn't be compiled
 
     This is handled internally by the compiler
@@ -29,7 +29,7 @@ class SQLRaw(binary_type):
     __slots__ = ()
 
 
-class SQLToken(binary_type):
+class SQLToken(text_type):
     """
     Used to mark a binary strin that should be considered as a single SQL
     token.
