@@ -539,20 +539,20 @@ Compile_recursive_compile(CompileObject *self, PyObject *expression,
                 if subexpression_type is SQLRaw or raw and (
                         subexpression_type in (binary_type, text_type)):
             */
-            if ((PyObject *)Py_TYPE(subexpression) == (PyObject *)SQLRaw ||
 #ifdef _PY3
+            if ((PyObject *)Py_TYPE(subexpression) == (PyObject *)SQLRaw ||
                 (raw && (PyBytes_CheckExact(subexpression) ||
+                         PyUnicode_CheckExact(subexpression)))) {
 #else
+            if ((PyObject *)subexpression->ob_type == (PyObject *)SQLRaw ||
                 (raw && (PyString_CheckExact(subexpression) ||
+                         PyUnicode_CheckExact(subexpression)))) {
 #endif
-                    PyUnicode_CheckExact(subexpression)))) {
-                /* statement = subexpression */
                 Py_INCREF(subexpression);
                 statement = subexpression;
             /* elif subexpression_type in (tuple, list): */
             } else if (PyTuple_CheckExact(subexpression) ||
-                                            PyList_CheckExact(subexpression)) {
-
+                       PyList_CheckExact(subexpression)) {
                 /* state.precedence = outer_precedence */
                 CATCH(-1, PyObject_SetAttrString(
                     state, "precedence", outer_precedence)
@@ -568,15 +568,15 @@ Compile_recursive_compile(CompileObject *self, PyObject *expression,
                     if token and (
                             subexpression_type in (binary_type, text_type)):
                 */
-                if (token && (PyUnicode_CheckExact(subexpression) ||
 #ifdef _PY3
-                    PyBytes_CheckExact(subexpression)
+                if (token && (PyUnicode_CheckExact(subexpression) ||
+                              PyBytes_CheckExact(subexpression))) {
 #else
-                    PyString_CheckExact(subexpression)
+                if (token && (PyUnicode_CheckExact(subexpression) ||
+                              PyString_CheckExact(subexpression))) {
 #endif
-                )) {
                     /* subexpression = SQLToken(subexpression) */
-                    CATCH(NULL, PyObject_CallFunctionObjArgs(
+                    CATCH(NULL, subexpression = PyObject_CallFunctionObjArgs(
                         SQLToken, subexpression, NULL)
                     );
                 } else {
