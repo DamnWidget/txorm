@@ -7,7 +7,7 @@ from __future__ import unicode_literals
 from weakref import WeakKeyDictionary
 
 from txorm import c_extensions_available
-from txorm.compat import binary_type, text_type
+from txorm.compat import binary_type, text_type, b
 
 from .state import State
 from .plain_sql import SQLRaw, SQLToken
@@ -125,7 +125,8 @@ class Compile(object):
                     )
 
                 compiled.append(statement)
-            statement = join.join(compiled)
+
+            statement = join.join((text_type(v) for v in compiled))
         else:
             statement = self._compile_single(
                 expression, state, outer_precedence
@@ -176,7 +177,7 @@ class Compile(object):
         )
         self._update_cache()
 
-    def is_reserver_word(self, word):
+    def is_reserved_word(self, word):
         """Determine if a word is in the reserved words cache
 
         :param word: thw word to check
