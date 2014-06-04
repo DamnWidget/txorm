@@ -55,6 +55,7 @@ class NoTableError(CompileError):
 def compile_str(compile, expression, state):
     """Compile a binary_type argument storing a valid value
     """
+
     state.parameters.append(RawStrVariable(expression))
     return '?'
 
@@ -187,7 +188,7 @@ def compile_select(compile, select, state):
     """Compile a SELECT statement
     """
 
-    tokens = ['SELECT']
+    tokens = ['SELECT ']
     state.push('auto_tables', [])
     state.push('context', FIELD)
 
@@ -198,7 +199,7 @@ def compile_select(compile, select, state):
                 compile(select.distinct, state, raw=True))
             )
 
-    tokens.append(compile(select.columns, state))
+    tokens.append(compile(select.fields, state))
     tables_pos = len(tokens)
     parameters_pos = len(state.parameters)
     state.context = EXPR
@@ -301,6 +302,7 @@ def compile_non_assoc_binary_operator(compile, expression, state):
     expression2 = compile(expression.expressions[1], state)
     return '{}{}{}'.format(expression1, expression.operator, expression2)
 
+
 # plain SQL
 @txorm_compile.when(SQLToken)
 def compile_sql_token(compile, expression, state):
@@ -308,6 +310,7 @@ def compile_sql_token(compile, expression, state):
         return expression
 
     return '"{}"'.format(expression.replace('"', '""'))
+
 
 # statement expressions
 def has_tables(state, expression):

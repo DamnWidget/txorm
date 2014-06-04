@@ -7,6 +7,8 @@
 
 from __future__ import unicode_literals
 
+from datetime import datetime, date, time, timedelta
+
 from twisted.trial import unittest
 
 from txorm import Undef
@@ -590,6 +592,58 @@ class CompileTest(unittest.TestCase):
         self.assertEqual(statement, '?')
         assert_variables(self, state.parameters, [FloatVariable(1.1)])
 
+    def test_compile_datetime(self):
+        dt = datetime(1936, 7, 17, 12, 0)
+        state = State()
+        statement = txorm_compile(dt, state)
+        self.assertEqual(statement, '?')
+        assert_variables(self, state.parameters, [DateTimeVariable(dt)])
+
+    def test_compile_date(self):
+        d = date(1936, 7, 17)
+        state = State()
+        statement = txorm_compile(d, state)
+        self.assertEqual(statement, '?')
+        assert_variables(self, state.parameters, [DateVariable(d)])
+
+    def test_compile_time(self):
+        t = time(12, 0)
+        state = State()
+        statement = txorm_compile(t, state)
+        self.assertEqual(statement, '?')
+        assert_variables(self, state.parameters, [TimeVariable(t)])
+
+    def test_compile_timedelta(self):
+        td = timedelta(days=1, seconds=2, microseconds=3)
+        state = State()
+        statement = txorm_compile(td, state)
+        self.assertEqual(statement, '?')
+        assert_variables(self, state.parameters, [TimeDeltaVariable(td)])
+
+    def test_compile_none(self):
+        state = State()
+        statement = txorm_compile(None, state)
+        self.assertEqual(statement, 'NULL')
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_select(self):
+        expression = Select([field1, field2])
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'SELECT field1, field2')
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_select_distinct(self):
+        expression = Select(
+            [field1, field2], where=Undef, tables=[table1], distinct=True
+        )
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement, 'SELECT DISTINCT field1, field2 FROM "table 1"'
+        )
+        self.assertEqual(state.parameters, [])
+
 
 def assert_variables(test, checked, expected):
     test.assertEqual(len(checked), len(expected))
@@ -608,6 +662,26 @@ elem6 = SQLToken('elem6')
 elem7 = SQLToken('elem7')
 elem8 = SQLToken('elem8')
 elem9 = SQLToken('elem9')
+
+field1 = SQLToken('field1')
+field2 = SQLToken('field2')
+field3 = SQLToken('field3')
+field4 = SQLToken('field4')
+field5 = SQLToken('field5')
+field6 = SQLToken('field6')
+field7 = SQLToken('field7')
+field8 = SQLToken('field8')
+field9 = SQLToken('field9')
+
+table1 = 'table 1'
+table2 = 'table 2'
+table3 = 'table 3'
+table4 = 'table 4'
+table5 = 'table 5'
+table6 = 'table 6'
+table7 = 'table 7'
+table8 = 'table 8'
+table9 = 'table 9'
 
 e1 = SQLRaw('1')
 e2 = SQLRaw('2')
