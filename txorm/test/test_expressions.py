@@ -14,16 +14,19 @@ from twisted.trial import unittest
 from txorm import Undef
 from txorm.variable import Variable
 from txorm.compiler.state import State
+from txorm.compiler.tables import Join
 from txorm.compiler import CompileError
+from txorm.compiler import TABLE, EXPR, FIELD
 from txorm.compiler.fields import Field, Alias
+from txorm.compiler.expressions import FromExpression
 from txorm.compiler.base import txorm_compile, Compile
 from txorm.compiler.tables import JoinExpression, Table
 from txorm.compiler.comparable import Add, Sub, Mul, Div
 from txorm.compiler.plain_sql import SQLRaw, SQLToken, SQL
 from txorm.compat import _PY3, b, u, binary_type, text_type
 from txorm.compiler.expressions import Select, Insert, Update, Delete
-from txorm.compiler.comparable import And, Or, Func, NamedFunc, Like, Eq
 from txorm.compiler.expressions import Union, Except, Intersect, Sequence
+from txorm.compiler.comparable import And, Or, Func, NamedFunc, Like, Eq, In
 from txorm.compiler.expressions import ExpressionError, Expression, AutoTables
 from txorm.variable import (
     RawStrVariable, UnicodeVariable, IntVariable, BoolVariable, FloatVariable,
@@ -634,15 +637,224 @@ class CompileTest(unittest.TestCase):
         self.assertEqual(state.parameters, [])
 
     def test_compile_select_distinct(self):
-        expression = Select(
-            [field1, field2], where=Undef, tables=[table1], distinct=True
-        )
+        expression = Select([field1, field2], Undef, [table1], distinct=True)
         state = State()
         statement = txorm_compile(expression, state)
         self.assertEqual(
             statement, 'SELECT DISTINCT field1, field2 FROM "table 1"'
         )
         self.assertEqual(state.parameters, [])
+
+    def test_compile_select_distinct_on(self):
+        expression = Select(
+            [field1, field2], Undef, [table1], distinct=[field2, field1])
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement,
+            'SELECT DISTINCT ON (field2, field1) field1, field2 FROM "table 1"'
+        )
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_select_with_strings(self):
+        expression = Select(
+            field1, b('1 = 2'), table1, order_by='field1', group_by='field2')
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement,
+            'SELECT field1 FROM "table 1" WHERE 1 = 2 GROUP BY field2 '
+            'ORDER BY field1'
+        )
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_select_with_unicode(self):
+        expression = Select(
+            field1, '1 = 2', table1, order_by='field1', group_by='field2')
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement,
+            'SELECT field1 FROM "table 1" WHERE 1 = 2 GROUP BY field2 '
+            'ORDER BY field1'
+        )
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_select_join(self):
+        expression = Select(
+            [field1, Func1()], Func1(), [table1, Join(table2), Join(table3)])
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement,
+            'SELECT field1, func1() FROM "table 1" JOIN "table 2" '
+            'JOIN "table 3" WHERE func1()'
+        )
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_select_where(self):
+        expression = Select(
+            [field1, Func1()],
+            Func1(),
+            [table1, Func1()],
+            order_by=[field2, Func1()],
+            group_by=[field3, Func1()],
+            limit=3, offset=4
+        )
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement,
+            'SELECT field1, func1() FROM "table 1", func1() WHERE func1() '
+            'GROUP BY field3, func1() ORDER BY field2, func1() '
+            'LIMIT 3 OFFSET 4'
+        )
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_select_having(self):
+        expression = Select(
+            field1, tables=table1, order_by='field1',
+            group_by=['field2'], having='1 = 2'
+        )
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement,
+            'SELECT field1 FROM "table 1" GROUP BY field2 HAVING 1 = 2 '
+            'ORDER BY field1'
+        )
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_select_contexts(self):
+        field, where, table, order_by, group_by = track_contexts(5)
+        expression = Select(
+            field, where, table, order_by=order_by, group_by=group_by)
+        txorm_compile(expression)
+        self.assertEquals(field.context, FIELD)
+        self.assertEquals(where.context, EXPR)
+        self.assertEquals(table.context, TABLE)
+        self.assertEquals(order_by.context, EXPR)
+        self.assertEquals(group_by.context, EXPR)
+
+    def test_compile_select_join_where(self):
+        expression = Select(
+            field1, Func1() == 'value1', Join(table1, Func2() == 'value2'))
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement,
+            'SELECT field1 FROM JOIN "table 1" ON func2() = ? '
+            'WHERE func1() = ?'
+        )
+        self.assertEqual(
+            [variable.get() for variable in state.parameters],
+            ['value2', 'value1']
+        )
+
+    def test_compile_select_join_right_left(self):
+        expression = Select(
+            [field1, Func1()], Func1(), [table1, Join(table2, table3)])
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement,
+            'SELECT field1, func1() FROM "table 1", "table 2" '
+            'JOIN "table 3" WHERE func1()'
+        )
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_select_auto_table_default(self):
+        expression = Select(
+            Field(field1), Field(field2) == 1, default_tables=table1)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement, 'SELECT field1 FROM "table 1" WHERE field2 = ?'
+        )
+        assert_variables(self, state.parameters, [Variable(1)])
+
+    def test_compile_select_auto_table(self):
+        expression = Select(Field(field1, table1), Field(field2, table2) == 1)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement,
+            'SELECT "table 1".field1 FROM "table 1", "table 2" '
+            'WHERE "table 2".field2 = ?'
+        )
+        assert_variables(self, state.parameters, [Variable(1)])
+
+    def test_compile_select_auto_table_unknown(self):
+        statement = txorm_compile(Select(elem1))
+        self.assertEqual(statement, 'SELECT elem1')
+
+    def test_compile_select_auto_table_duplicated(self):
+        expression = Select(Field(field1, table1), Field(field2, table1) == 1)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement,
+            'SELECT "table 1".field1 FROM "table 1" WHERE "table 1".field2 = ?'
+        )
+        assert_variables(self, state.parameters, [Variable(1)])
+
+    def test_compile_select_auto_table_default_with_joins(self):
+        expression = Select(
+            Field(field1), default_tables=[table1, Join(table2)])
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement, 'SELECT field1 FROM "table 1" JOIN "table 2"'
+        )
+        assert_variables(self, state.parameters, [])
+
+    def test_compile_select_auto_table_sub(self):
+        f1 = Field(field1, table1)
+        f2 = Field(field2, table2)
+        expression = Select(f1, In(elem1, Select(f2, f1 == f2, f2.table)))
+        statement = txorm_compile(expression)
+        self.assertEqual(
+            statement,
+            'SELECT "table 1".field1 FROM "table 1" WHERE elem1 IN ('
+            'SELECT "table 2".field2 FROM "table 2" '
+            'WHERE "table 1".field1 = "table 2".field2)'
+        )
+
+    def test_compile_insert(self):
+        expression = Insert({field1: elem1, Func1(): Func2()}, Func2())
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertTrue(
+            statement in (
+                'INSERT INTO func2() (field1, func1()) '
+                'VALUES (elem1, func2())',
+                'INSERT INTO func2() (func1(), field1) '
+                'VALUES (func2(), elem1)'
+            ), statement
+        )
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_insert_with_fields(self):
+        expression = Insert({
+            Field(field1, table1): elem1, Field(field2, table1): elem2
+        }, table2)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertTrue(
+            statement in (
+                'INSERT INTO "table 2" (field1, field2) VALUES (elem1, elem2)',
+                'INSERT INTO "table 2" (field2, field1) VALUES (elem2, elem1)'
+            ), statement
+        )
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_insert_with_columns_to_escape(self):
+        expression = Insert({Field('field 1', table1): elem1}, table2)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEquals(
+            statement, 'INSERT INTO "table 2" ("field 1") VALUES (elem1)')
+        self.assertEquals(state.parameters, [])
 
 
 def assert_variables(test, checked, expected):
@@ -651,6 +863,19 @@ def assert_variables(test, checked, expected):
         test.assertEqual(check.__class__, expect.__class__)
         test.assertEqual(check.get(), expect.get())
 
+
+class TrackContext(FromExpression):
+    context = None
+
+
+@txorm_compile.when(TrackContext)
+def compile_track_context(compile, expression, state):
+    expression.context = state.context
+    return ''
+
+
+def track_contexts(n):
+    return [TrackContext() for i in range(n)]
 
 # I don't like dynamic variables because the linter give me fake possitives
 elem1 = SQLToken('elem1')
@@ -696,6 +921,9 @@ e9 = SQLRaw('9')
 
 class Func1(NamedFunc):
     name = 'func1'
+
+    def __hash__(self):
+        return hash(self.name)
 
 
 class Func2(NamedFunc):

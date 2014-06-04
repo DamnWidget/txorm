@@ -5,16 +5,19 @@
 """TxORM Compiler
 """
 
+from __future__ import unicode_literals
+
 import re
 from decimal import Decimal
 from collections import defaultdict
 from datetime import datetime, date, time, timedelta
 
 from txorm.compat import itervalues
-from txorm.compat import text_type, binary_type, integer_types
+from txorm.compat import text_type, binary_type, integer_types, _PY3
 
 from txorm import Undef
 from .base import Context
+from .fields import Field, Alias
 from .expressions import Expression
 from .plain_sql import SQL, SQLToken
 from .comparable import LShift, RShift
@@ -173,6 +176,46 @@ def compile_python_variable(compile, variable, state):
     return '_{}'.format(index)
 
 
+# compile fields
+@txorm_compile.when(Field)
+def compile_field(compile, field, state):
+    """Compile a database field
+    """
+
+    def _check_cache():
+        if field.compile_id != id(compile):
+            field.compile_cache = compile(field.name, state, token=True)
+            field.compile_id = id(compile)
+
+    if field.table is not Undef:
+        state.auto_tables.append(field.table)
+
+    if field.table is Undef or state.context is FIELD_NAME:
+        if state.aliases is not None:
+            alias = state.aliases.get(field)
+            if alias is not None:
+                return compile(alias.name, state, token=True)
+
+        _check_cache()
+        return field.compile_cache
+
+    state.push('context', FIELD_PREFIX)
+    table = compile(field.table, state, token=True)
+    state.pop()
+
+    _check_cache()
+    return '{}.{}'.format(table, field.compile_cache)
+
+
+@txorm_compile_python.when(Field)
+def compile_python_field(compile, field, state):
+    """Compile a Field variable into the right representation
+    """
+    index = len(state.parameters)
+    state.parameters.append(field)
+    return 'get_field(_{})'.format(index)
+
+
 # compile expressions
 @txorm_compile_python.when(Expression)
 def compile_python_non_supported(compile, expression, state):
@@ -195,7 +238,7 @@ def compile_select(compile, select, state):
     if select.distinct:
         tokens.append('DISTINCT ')
         if isinstance(select.distinct, (tuple, list)):
-            tokens.append('ON ({})'.format(
+            tokens.append('ON ({}) '.format(
                 compile(select.distinct, state, raw=True))
             )
 
@@ -208,9 +251,11 @@ def compile_select(compile, select, state):
     for token in tlist:
         if getattr(select, token, Undef) is not Undef:
             tokens.append(' {} {}'.format(
-                token.upper(),
+                token.upper().replace('_', ' '),
                 getattr(select, token) if token in ('offset', 'limit') else '')
             )
+            if token not in ('offset', 'limit'):
+                tokens.append(compile(getattr(select, token), state, raw=True))
 
     if has_tables(state, select):
         state.context = TABLE
@@ -227,6 +272,15 @@ def compile_select(compile, select, state):
     state.pop()
     state.pop()
 
+    if _PY3:
+        _tokens = []
+        for token in tokens:
+            if isinstance(token, binary_type):
+                _tokens.append(token.decode())
+            else:
+                _tokens.append(token)
+        return ''.join(_tokens)
+
     return ''.join(tokens)
 
 
@@ -238,7 +292,7 @@ def compile_insert(compile, insert, state):
     state.push('context', FIELD_NAME)
     fields = compile(tuple(insert.map), state, token=True)
     state.context = TABLE
-    table = build_tables(compile, insert.table, insert.default_tables, state)
+    table = build_tables(compile, insert.table, insert.default_table, state)
     state.context = EXPR
     values = insert.values
     if values is Undef:
@@ -253,7 +307,7 @@ def compile_insert(compile, insert, state):
             )
         )
     state.pop()
-    return ''.join(['INSERT INTO', table, ' (', fields, ') ', compiled])
+    return ''.join(['INSERT INTO ', table, ' (', fields, ') ', compiled])
 
 
 @txorm_compile.when(Func, NamedFunc)
@@ -267,7 +321,7 @@ def compile_func(compile, func, state):
     return '{}({})'.format(func.name, args)
 
 
-# comparables
+# compile comparables
 @txorm_compile.when(CompoundOperator)
 def compile_compound_operator(compile, expression, state):
     """Compile common compound operators
@@ -301,6 +355,66 @@ def compile_non_assoc_binary_operator(compile, expression, state):
     state.precedence += 0.5   # enforce parenthesis
     expression2 = compile(expression.expressions[1], state)
     return '{}{}{}'.format(expression1, expression.operator, expression2)
+
+
+# compile operators
+@txorm_compile.when(Eq)
+def compile_eq(compile, eq, state):
+    """Compile Eq operator
+    """
+
+    if eq.expressions[1] is None:
+        return '{} IS NULL'.format(compile(eq.expressions[0], state))
+
+    return '{} = {}'.format(
+        compile(eq.expressions[0], state), compile(eq.expressions[1], state)
+    )
+
+
+@txorm_compile.when(In)
+def compile_in(compile, expression, state):
+    """Compile In operator
+    """
+
+    expression1 = compile(expression.expressions[0], state)
+    state.precedence = 0  # enforce parentehsis here
+    return '{} IN ({})'.format(
+        expression1, compile(expression.expressions[1], state)
+    )
+
+
+# joins
+@txorm_compile.when(JoinExpression)
+def compile_join(compile, join, state):
+    """Compile a JOIN expression
+    """
+
+    result = []
+    if join.left is not Undef:
+        statement = compile(join.left, state, token=True)
+        result.append(statement)
+
+        if state.join_tables is not None:
+            state.join_tables.add(statement)
+
+    result.append(join.operator)
+
+    # joins are left associative so ensure joins in the right hand
+    # argument get parenthesis enforcing it
+    state.precedence += 0.5
+    statement = compile(join.right, state, token=True)
+    result.append(statement)
+
+    if state.join_tables is not None:
+        state.join_tables.add(statement)
+    if join.on is not Undef:
+        state.push('context', EXPR)
+        result.append('ON')
+        result.append(compile(join.on, state, raw=True))
+        state.pop()
+
+    return ' '.join(result)
+
 
 
 # plain SQL

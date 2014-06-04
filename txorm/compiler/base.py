@@ -276,7 +276,7 @@ class CompilePython(Compile):
         code = (
             'def closure(parameters, bool):\n'
             '   [{}] = parameters\n'
-            '   def match(get_column):\n'
+            '   def match(get_field):\n'
             '       return bool({})\n'
             '   return match'.format(
                 ','.join('_{}'.format(
