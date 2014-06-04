@@ -5,17 +5,18 @@
 """TxORM Compiler
 """
 
+import re
 from decimal import Decimal
 from collections import defaultdict
 from datetime import datetime, date, time, timedelta
 
 from txorm.compat import itervalues
-from txorm.compat import text_type, binary_type, integer_types, b, _PY3
+from txorm.compat import text_type, binary_type, integer_types
 
 from txorm import Undef
 from .base import Context
-from .plain_sql import SQL
 from .expressions import Expression
+from .plain_sql import SQL, SQLToken
 from .comparable import LShift, RShift
 from .comparable import Func, NamedFunc
 from .comparable import Add, Sub, Mul, Div, Mod
@@ -39,6 +40,8 @@ FIELD = Context('FIELD')
 FIELD_PREFIX = Context('FIELD_PREFIX')
 FIELD_NAME = Context('FIELD_NAME')
 SELECT = Context('SELECT')
+
+is_safe_token = re.compile("^[a-zA-Z][a-zA-Z0-9_]*$").match
 
 
 class NoTableError(CompileError):
@@ -64,7 +67,7 @@ def compile_text_type(compile, expression, state):
     return '?'
 
 
-@txorm_compile.when(integer_types)
+@txorm_compile.when(*integer_types)
 def compile_int(compile, expression, state):
     """Compile int and long (or int in Python3) argumnt storing a valid value
     """
@@ -298,6 +301,13 @@ def compile_non_assoc_binary_operator(compile, expression, state):
     expression2 = compile(expression.expressions[1], state)
     return '{}{}{}'.format(expression1, expression.operator, expression2)
 
+# plain SQL
+@txorm_compile.when(SQLToken)
+def compile_sql_token(compile, expression, state):
+    if is_safe_token(expression) and not compile.is_reserved_word(expression):
+        return expression
+
+    return '"{}"'.format(expression.replace('"', '""'))
 
 # statement expressions
 def has_tables(state, expression):

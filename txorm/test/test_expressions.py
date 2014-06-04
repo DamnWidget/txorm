@@ -12,6 +12,7 @@ from twisted.trial import unittest
 from txorm import Undef
 from txorm.variable import Variable
 from txorm.compiler.state import State
+from txorm.compiler import CompileError
 from txorm.compiler.fields import Field, Alias
 from txorm.compiler.base import txorm_compile, Compile
 from txorm.compiler.tables import JoinExpression, Table
@@ -22,6 +23,11 @@ from txorm.compiler.expressions import Select, Insert, Update, Delete
 from txorm.compiler.comparable import And, Or, Func, NamedFunc, Like, Eq
 from txorm.compiler.expressions import Union, Except, Intersect, Sequence
 from txorm.compiler.expressions import ExpressionError, Expression, AutoTables
+from txorm.variable import (
+    RawStrVariable, UnicodeVariable, IntVariable, BoolVariable, FloatVariable,
+    DecimalVariable, DateTimeVariable, DateVariable, TimeVariable,
+    TimeDeltaVariable
+)
 
 
 class ExpressionsTest(unittest.TestCase):
@@ -478,7 +484,6 @@ class CompileTest(unittest.TestCase):
 
         @compile_child.when(C)
         def compile_in_child(compile, state, expression):
-            print(state)
             return 'child'
 
         statement = compile_child(C())
@@ -498,27 +503,121 @@ class CompileTest(unittest.TestCase):
         self.assertTrue(c.get_precedence(Add) < c.get_precedence(Mul))
         self.assertTrue(c.get_precedence(Sub) < c.get_precedence(Div))
 
+    def test_customize_precedence(self):
+        expression = And(elem1, Or(elem2, elem3))
+        custom_compile = txorm_compile.create_child()
+
+        custom_compile.set_precedence(10, And)
+        custom_compile.set_precedence(11, Or)
+        statement = custom_compile(expression)
+        self.assertEqual(statement, 'elem1 AND elem2 OR elem3')
+
+        custom_compile.set_precedence(10, Or)
+        statement = custom_compile(expression)
+        self.assertEqual(statement, 'elem1 AND elem2 OR elem3')
+
+        custom_compile.set_precedence(9, Or)
+        statement = custom_compile(expression)
+        self.assertEqual(statement, 'elem1 AND (elem2 OR elem3)')
+
+    def test_customize_precedence_inheritance(self):
+        compile_parent = txorm_compile.create_child()
+        compile_child = compile_parent.create_child()
+
+        expression = And(elem1, Or(elem2, elem3))
+
+        compile_parent.set_precedence(10, And)
+        compile_parent.set_precedence(11, Or)
+        self.assertEqual(compile_child.get_precedence(Or), 11)
+        self.assertEqual(compile_parent.get_precedence(Or), 11)
+        statement = compile_child(expression)
+        self.assertEqual(statement, 'elem1 AND elem2 OR elem3')
+
+        compile_parent.set_precedence(10, Or)
+        self.assertEqual(compile_child.get_precedence(Or), 10)
+        self.assertEqual(compile_parent.get_precedence(Or), 10)
+        statement = compile_child(expression)
+        self.assertEqual(statement, 'elem1 AND elem2 OR elem3')
+
+        compile_child.set_precedence(9, Or)
+        self.assertEqual(compile_child.get_precedence(Or), 9)
+        self.assertEqual(compile_parent.get_precedence(Or), 10)
+        statement = compile_child(expression)
+        self.assertEqual(statement, 'elem1 AND (elem2 OR elem3)')
+
+    def test_compile_sequence(self):
+        expression = [elem1, Func1(), (Func2(), None)]
+        statement = txorm_compile(expression)
+        self.assertEqual(statement, 'elem1, func1(), func2(), NULL')
+
+    def test_compile_invalid(self):
+        self.assertRaises(CompileError, txorm_compile, object())
+        self.assertRaises(CompileError, txorm_compile, [object()])
+
+    def test_compile_str(self):
+        state = State()
+        statement = txorm_compile(b('str'), state)
+        self.assertEqual(statement, '?')
+        assert_variables(self, state.parameters, [RawStrVariable(b('str'))])
+
+    def test_compile_unicode(self):
+        state = State()
+        statement = txorm_compile(u('unicode'), state)
+        self.assertEqual(statement, '?')
+        assert_variables(self, state.parameters, [UnicodeVariable('unicode')])
+
+    def test_compile_int_long(self):
+        state = State()
+        statement = txorm_compile(1, state)
+        self.assertEqual(statement, '?')
+        assert_variables(self, state.parameters, [IntVariable(1)])
+
+    def test_compile_bool(self):
+        state = State()
+        statement = txorm_compile(True, state)
+        self.assertEqual(statement, '?')
+        assert_variables(self, state.parameters, [BoolVariable(True)])
+
+    def test_compile_float(self):
+        state = State()
+        statement = txorm_compile(1.1, state)
+        self.assertEqual(statement, '?')
+        assert_variables(self, state.parameters, [FloatVariable(1.1)])
+
+    def test_compile_decimal(self):
+        state = State()
+        statement = txorm_compile(1.1, state)
+        self.assertEqual(statement, '?')
+        assert_variables(self, state.parameters, [FloatVariable(1.1)])
+
+
+def assert_variables(test, checked, expected):
+    test.assertEqual(len(checked), len(expected))
+    for check, expect in zip(checked, expected):
+        test.assertEqual(check.__class__, expect.__class__)
+        test.assertEqual(check.get(), expect.get())
+
 
 # I don't like dynamic variables because the linter give me fake possitives
-elem1 = SQLToken('elem1' if not _PY3 else b('elem1'))
-elem2 = SQLToken('elem2' if not _PY3 else b('elem2'))
-elem3 = SQLToken('elem3' if not _PY3 else b('elem3'))
-elem4 = SQLToken('elem4' if not _PY3 else b('elem4'))
-elem5 = SQLToken('elem5' if not _PY3 else b('elem5'))
-elem6 = SQLToken('elem6' if not _PY3 else b('elem6'))
-elem7 = SQLToken('elem7' if not _PY3 else b('elem7'))
-elem8 = SQLToken('elem8' if not _PY3 else b('elem8'))
-elem9 = SQLToken('elem9' if not _PY3 else b('elem9'))
+elem1 = SQLToken('elem1')
+elem2 = SQLToken('elem2')
+elem3 = SQLToken('elem3')
+elem4 = SQLToken('elem4')
+elem5 = SQLToken('elem5')
+elem6 = SQLToken('elem6')
+elem7 = SQLToken('elem7')
+elem8 = SQLToken('elem8')
+elem9 = SQLToken('elem9')
 
-e1 = SQLRaw('1' if not _PY3 else b('1'))
-e2 = SQLRaw('2' if not _PY3 else b('2'))
-e3 = SQLRaw('3' if not _PY3 else b('3'))
-e4 = SQLRaw('4' if not _PY3 else b('4'))
-e5 = SQLRaw('5' if not _PY3 else b('5'))
-e6 = SQLRaw('6' if not _PY3 else b('6'))
-e7 = SQLRaw('7' if not _PY3 else b('7'))
-e8 = SQLRaw('8' if not _PY3 else b('8'))
-e9 = SQLRaw('9' if not _PY3 else b('9'))
+e1 = SQLRaw('1')
+e2 = SQLRaw('2')
+e3 = SQLRaw('3')
+e4 = SQLRaw('4')
+e5 = SQLRaw('5')
+e6 = SQLRaw('6')
+e7 = SQLRaw('7')
+e8 = SQLRaw('8')
+e9 = SQLRaw('9')
 
 
 class Func1(NamedFunc):
