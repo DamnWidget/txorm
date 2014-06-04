@@ -5,6 +5,7 @@
 from __future__ import unicode_literals
 
 from txorm import Undef
+from txorm.utils.construct import parse_args
 
 
 class ExpressionError(Exception):
@@ -39,17 +40,11 @@ class Select(Expression):
         'group_by', 'limit', 'offset', 'distinct', 'having'
     )
 
-    def __init__(self, fields, **kwargs):
+    def __init__(self, fields, *args, **kwargs):
         self.fields = fields
-        self.where = kwargs.get('where', Undef)
-        self.tables = kwargs.get('tables', Undef)
-        self.default_tables = kwargs.get('default_tables', Undef)
-        self.order_by = kwargs.get('order_by', Undef)
-        self.group_by = kwargs.get('group_by', Undef)
-        self.limit = kwargs.get('limit', Undef)
-        self.offset = kwargs.get('offset', Undef)
-        self.distinct = kwargs.get('distinct', False)
-        self.having = kwargs.get('having', Undef)
+        parse_args(self, *args, **kwargs)
+        if getattr(self, 'distinct', Undef) is Undef:
+            self.distinct = False
 
 
 class Insert(Expression):
@@ -68,13 +63,9 @@ class Insert(Expression):
         'primary_fields', 'primary_variables', 'values'
     )
 
-    def __init__(self, map, **kwargs):
+    def __init__(self, map, *args, **kwargs):
         self.map = map
-        self.table = kwargs.get('table', Undef)
-        self.default_table = kwargs.get('default_table', Undef)
-        self.primary_fields = kwargs.get('primary_fields', Undef)
-        self.primary_variables = kwargs.get('primary_variables', Undef)
-        self.values = kwargs.get('values', Undef)
+        parse_args(self, *args, **kwargs)
 
 
 class Update(Expression):
@@ -89,12 +80,9 @@ class Update(Expression):
 
     __slots__ = ('map', 'where', 'table', 'default_table', 'primary_fields')
 
-    def __init__(self, map, **kwargs):
+    def __init__(self, map, *args, **kwargs):
         self.map = map
-        self.where = kwargs.get('where', Undef)
-        self.table = kwargs.get('table', Undef)
-        self.default_table = kwargs.get('default_table', Undef)
-        self.primary_fields = kwargs.get('primary_fields', Undef)
+        parse_args(self, *args, **kwargs)
 
 
 class Delete(Expression):
@@ -107,10 +95,8 @@ class Delete(Expression):
 
     __slots__ = ('where', 'table', 'default_table')
 
-    def __init__(self, where=Undef, table=Undef, default_table=Undef):
-        self.where = where
-        self.table = table
-        self.default_table = default_table
+    def __init__(self, *args, **kwargs):
+        parse_args(self, *args, **kwargs)
 
 
 class Distinct(Expression):
@@ -118,6 +104,7 @@ class Distinct(Expression):
 
     :param expression: the expression to prefix
     """
+    __slots__ = ('expression',)
 
     def __init__(self, expression):
         self.expression = expression
