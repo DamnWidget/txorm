@@ -5,6 +5,7 @@
 from __future__ import unicode_literals
 
 from txorm import Undef
+# from txorm.compat import _PY3
 from txorm.variable import Variable
 from .comparable import ComparableExpression
 
@@ -36,6 +37,9 @@ class Field(ComparableExpression):
             self.variable_factory = variable_factory
         else:
             self.variable_factory = Variable
+
+    def __hash__(self):
+        return hash((self.name, self.table, self.primary))
 
 
 class Alias(ComparableExpression):
