@@ -310,6 +310,32 @@ def compile_insert(compile, insert, state):
     return ''.join(['INSERT INTO ', table, ' (', fields, ') ', compiled])
 
 
+@txorm_compile.when(Update)
+def compile_update(compile, update, state):
+    """Compile a UPDATE statement
+    """
+
+    _map = update.map
+    state.push('context', FIELD_NAME)
+    sets = ['{}={}'.format(
+        compile(field, state, token=True), compile(_map[field], state))
+        for field in _map
+    ]
+    state.context = TABLE
+    tokens = ['UPDATE ', build_tables(
+        compile, update.table,
+        update.default_table, state), ' SET ', ', '.join(sets)
+    ]
+
+    if update.where is not Undef:
+        state.context = EXPR
+        tokens.append(' WHERE ')
+        tokens.append(compile(update.where, state, raw=True))
+
+    state.pop()
+    return ''.join(tokens)
+
+
 @txorm_compile.when(Func, NamedFunc)
 def compile_func(compile, func, state):
     """Compile a function or named function (like SUM, SUB, ADD...)
