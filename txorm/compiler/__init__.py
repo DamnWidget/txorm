@@ -336,6 +336,26 @@ def compile_update(compile, update, state):
     return ''.join(tokens)
 
 
+@txorm_compile.when(Delete)
+def compile_delete(compile, delete, state):
+    """Compile a DELETE statement
+    """
+
+    tokens = ['DELETE FROM ', None]
+    state.push('context', EXPR)
+    if delete.where is not Undef:
+        tokens.append(' WHERE ')
+        tokens.append(compile(delete.where, state, raw=True))
+
+    # compile later for auto_tables support
+    state.context = TABLE
+    tokens[1] = build_tables(
+        compile, delete.table, delete.default_table, state)
+
+    state.pop()
+    return ''.join(tokens)
+
+
 @txorm_compile.when(Func, NamedFunc)
 def compile_func(compile, func, state):
     """Compile a function or named function (like SUM, SUB, ADD...)

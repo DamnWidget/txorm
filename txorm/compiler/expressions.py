@@ -96,7 +96,7 @@ class Delete(Expression):
     __slots__ = ('where', 'table', 'default_table')
 
     def __init__(self, *args, **kwargs):
-        parse_args(self, *args, **kwargs)
+        parse_args(self, *args, skip_first_slot=False, **kwargs)
 
 
 class Distinct(Expression):

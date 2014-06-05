@@ -103,8 +103,8 @@ class ExpressionsTest(unittest.TestCase):
 
     def test_delete_default(self):
         expression = Delete()
-        self.assertEquals(expression.where, Undef)
-        self.assertEquals(expression.table, Undef)
+        self.assertEqual(expression.where, Undef)
+        self.assertEqual(expression.table, Undef)
 
     def test_delete_constructor(self):
         objects = [object() for i in range(3)]
@@ -730,11 +730,11 @@ class CompileTest(unittest.TestCase):
         expression = Select(
             field, where, table, order_by=order_by, group_by=group_by)
         txorm_compile(expression)
-        self.assertEquals(field.context, FIELD)
-        self.assertEquals(where.context, EXPR)
-        self.assertEquals(table.context, TABLE)
-        self.assertEquals(order_by.context, EXPR)
-        self.assertEquals(group_by.context, EXPR)
+        self.assertEqual(field.context, FIELD)
+        self.assertEqual(where.context, EXPR)
+        self.assertEqual(table.context, TABLE)
+        self.assertEqual(order_by.context, EXPR)
+        self.assertEqual(group_by.context, EXPR)
 
     def test_compile_select_join_where(self):
         expression = Select(
@@ -852,9 +852,9 @@ class CompileTest(unittest.TestCase):
         expression = Insert({Field('field 1', table1): elem1}, table2)
         state = State()
         statement = txorm_compile(expression, state)
-        self.assertEquals(
+        self.assertEqual(
             statement, 'INSERT INTO "table 2" ("field 1") VALUES (elem1)')
-        self.assertEquals(state.parameters, [])
+        self.assertEqual(state.parameters, [])
 
     def test_compile_insert_with_fields_as_raw_strings(self):
         expression = Insert({r'field 1': elem1}, table2)
@@ -1009,6 +1009,53 @@ class CompileTest(unittest.TestCase):
         txorm_compile(expression)
         self.assertEqual(set_left.context, FIELD_NAME)
         self.assertEqual(set_right.context, FIELD_NAME)
+        self.assertEqual(where.context, EXPR)
+        self.assertEqual(table.context, TABLE)
+
+    def test_compile_delete(self):
+        expression = Delete(table=table1)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'DELETE FROM "table 1"')
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_delete_where(self):
+        expression = Delete(Func1(), Func2())
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'DELETE FROM func2() WHERE func1()')
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_delete_with_strings(self):
+        expression = Delete('1 = 2', table1)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'DELETE FROM "table 1" WHERE 1 = 2')
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_delete_auto_table(self):
+        expression = Delete(Field(field1, table1) == 1)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement, 'DELETE FROM "table 1" WHERE "table 1".field1 = ?')
+        assert_variables(self, state.parameters, [Variable(1)])
+
+    def test_compile_delete_auto_table_default(self):
+        expression = Delete(Field(field1) == 1, default_table=table1)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'DELETE FROM "table 1" WHERE field1 = ?')
+        assert_variables(self, state.parameters, [Variable(1)])
+
+    def test_compile_delete_auto_table_unknown(self):
+        expression = Delete(Field(field1) == 1)
+        self.assertRaises(NoTableError, txorm_compile, expression)
+
+    def test_compile_delete_contexts(self):
+        where, table = track_contexts(2)
+        expression = Delete(where, table)
+        txorm_compile(expression)
         self.assertEqual(where.context, EXPR)
         self.assertEqual(table.context, TABLE)
 
