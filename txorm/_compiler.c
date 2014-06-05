@@ -418,9 +418,9 @@ Compile__single(CompileObject *self,
             PyObject *repr = PyObject_Repr(expression);
             if (repr) {
                 PyErr_Format(
-                    CompileError, "Don't know how to compile type %s of %s",
+                    CompileError, "Don't know how to compile type %s of %p",
 #ifdef _PY3
-                    Py_TYPE(expression)->tp_name, PyBytes_AS_STRING(repr)
+                    Py_TYPE(expression)->tp_name, PyBytes_AS_STRING(expression)
                 );
 #else
                     Py_TYPE(expression)->tp_name, PyString_AS_STRING(repr)
