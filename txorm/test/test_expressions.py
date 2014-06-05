@@ -20,13 +20,14 @@ from txorm.compiler import CompileError, NoTableError
 from txorm.compiler.expressions import FromExpression
 from txorm.compiler.base import txorm_compile, Compile
 from txorm.compiler.tables import JoinExpression, Table
-from txorm.compiler.comparable import Add, Sub, Mul, Div
-from txorm.compiler import TABLE, EXPR, FIELD, FIELD_NAME
 from txorm.compiler.plain_sql import SQLRaw, SQLToken, SQL
 from txorm.compat import _PY3, b, u, binary_type, text_type
+from txorm.compiler.comparable import Add, Sub, Mul, Div, Row
 from txorm.compiler.expressions import Select, Insert, Update, Delete
+from txorm.compiler import TABLE, EXPR, FIELD, FIELD_NAME, FIELD_PREFIX
 from txorm.compiler.expressions import Union, Except, Intersect, Sequence
 from txorm.compiler.comparable import And, Or, Func, NamedFunc, Like, Eq, In
+from txorm.compiler.comparable import Ne, Gt, Ge, Lt, Le, LShift, RShift
 from txorm.compiler.expressions import ExpressionError, Expression, AutoTables
 from txorm.variable import (
     RawStrVariable, UnicodeVariable, IntVariable, BoolVariable, FloatVariable,
@@ -1058,6 +1059,191 @@ class CompileTest(unittest.TestCase):
         txorm_compile(expression)
         self.assertEqual(where.context, EXPR)
         self.assertEqual(table.context, TABLE)
+
+    def test_compile_field(self):
+        expression = Field(field1)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'field1')
+        self.assertEqual(state.parameters, [])
+        self.assertEqual(expression.compile_cache, 'field1')
+
+    def test_compile_field_table(self):
+        field = Field(field1, Func1())
+        expression = Select(field)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'SELECT func1().field1 FROM func1()')
+        self.assertEqual(state.parameters, [])
+        self.assertEqual(field.compile_cache, 'field1')
+
+    def test_compile_field_contexts(self):
+        table, = track_contexts(1)
+        expr = Field(field1, table)
+        txorm_compile(expr)
+        self.assertEqual(table.context, FIELD_PREFIX)
+
+    def test_compile_field_with_reserved_word(self):
+        expression = Select(Field('name 1', 'table 1'))
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'SELECT "table 1"."name 1" FROM "table 1"')
+
+    def test_compile_row(self):
+        expression = Row(field1, field2)
+        statement = txorm_compile(expression)
+        self.assertEqual(statement, 'ROW(field1, field2)')
+
+    def test_compile_variable(self):
+        expression = Variable('Value')
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, '?')
+        assert_variables(self, state.parameters, [Variable('Value')])
+
+    def test_compile_eq(self):
+        expression = Eq(Func1(), Func2())
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'func1() = func2()')
+        self.assertEqual(state.parameters, [])
+
+        expression = Func1() == 'value'
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'func1() = ?')
+        assert_variables(self, state.parameters, [Variable('value')])
+
+    def test_compile_is_in(self):
+        expression = Func1().is_in(['Hello', 'World'])
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'func1() IN (?, ?)')
+        assert_variables(
+            self, state.parameters, [Variable('Hello'), Variable('World')])
+
+    def test_compile_is_in_empty(self):
+        expression = Func1().is_in([])
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, '?')
+        assert_variables(self, state.parameters, [BoolVariable(False)])
+
+    def test_compile_is_in_expr(self):
+        expression = Func1().is_in(Select(field1))
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'func1() IN (SELECT field1)')
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_eq_none(self):
+        expression = Func1() == None  # noqa
+        self.assertTrue(expression.expressions[1] is None)
+
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'func1() IS NULL')
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_ne(self):
+        expression = Ne(Func1(), Func2())
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'func1() != func2()')
+        self.assertEqual(state.parameters, [])
+
+        expression = Func1() != 'value'
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'func1() != ?')
+        assert_variables(self, state.parameters, [Variable('value')])
+
+    def test_compile_ne_none(self):
+        expression = Func1() != None  # noqa
+
+        self.assertTrue(expression.expressions[1] is None)
+
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'func1() IS NOT NULL')
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_gt(self):
+        expression = Gt(Func1(), Func2())
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'func1() > func2()')
+        self.assertEqual(state.parameters, [])
+
+        expression = Func1() > 'value'
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'func1() > ?')
+        assert_variables(self, state.parameters, [Variable('value')])
+
+    def test_compile_ge(self):
+        expression = Ge(Func1(), Func2())
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'func1() >= func2()')
+        self.assertEqual(state.parameters, [])
+
+        expression = Func1() >= 'value'
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'func1() >= ?')
+        assert_variables(self, state.parameters, [Variable('value')])
+
+    def test_compile_lt(self):
+        expression = Lt(Func1(), Func2())
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'func1() < func2()')
+        self.assertEqual(state.parameters, [])
+
+        expression = Func1() < 'value'
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'func1() < ?')
+        assert_variables(self, state.parameters, [Variable('value')])
+
+    def test_compile_le(self):
+        expression = Le(Func1(), Func2())
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'func1() <= func2()')
+        self.assertEqual(state.parameters, [])
+
+        expression = Func1() <= 'value'
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'func1() <= ?')
+        assert_variables(self, state.parameters, [Variable('value')])
+
+    def test_compile_lshift(self):
+        expression = LShift(Func1(), Func2())
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'func1()<<func2()')
+        self.assertEqual(state.parameters, [])
+
+        expression = Func1() << 'value'
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'func1()<<?')
+        assert_variables(self, state.parameters, [Variable('value')])
+
+    def test_compile_rshift(self):
+        expression = RShift(Func1(), Func2())
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'func1()>>func2()')
+        self.assertEqual(state.parameters, [])
+
+        expression = Func1() >> 'value'
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'func1()>>?')
+        assert_variables(self, state.parameters, [Variable('value')])
 
 
 def assert_variables(test, checked, expected):

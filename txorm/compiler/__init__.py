@@ -490,7 +490,6 @@ def compile_join(compile, join, state):
     return ' '.join(result)
 
 
-
 # plain SQL
 @txorm_compile.when(SQLToken)
 def compile_sql_token(compile, expression, state):
