@@ -15,13 +15,13 @@ from txorm import Undef
 from txorm.variable import Variable
 from txorm.compiler.state import State
 from txorm.compiler.tables import Join
-from txorm.compiler import TABLE, EXPR, FIELD
 from txorm.compiler.fields import Field, Alias
 from txorm.compiler import CompileError, NoTableError
 from txorm.compiler.expressions import FromExpression
 from txorm.compiler.base import txorm_compile, Compile
 from txorm.compiler.tables import JoinExpression, Table
 from txorm.compiler.comparable import Add, Sub, Mul, Div
+from txorm.compiler import TABLE, EXPR, FIELD, FIELD_NAME
 from txorm.compiler.plain_sql import SQLRaw, SQLToken, SQL
 from txorm.compat import _PY3, b, u, binary_type, text_type
 from txorm.compiler.expressions import Select, Insert, Update, Delete
@@ -895,6 +895,122 @@ class CompileTest(unittest.TestCase):
     def test_compile_insert_auto_table_unknown(self):
         expression = Insert({Field(field1): elem1})
         self.assertRaises(NoTableError, txorm_compile, expression)
+
+    def tets_compile_insert_contexts(self):
+        field, value, table = track_contexts(3)
+        expression = Insert({field: value}, table)
+        txorm_compile(expression)
+        self.assertEqual(field.context, FIELD_NAME)
+        self.assertEqual(value.context, EXPR)
+        self.assertEqual(table.context, TABLE)
+
+    def test_compile_insert_bulk(self):
+        expression = Insert(
+            (Field(field1, table1), Field(field2, table1)),
+            values=[(elem1, elem2), (elem3, elem4)]
+        )
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement,
+            'INSERT INTO "table 1" (field1, field2) '
+            'VALUES (elem1, elem2), (elem3, elem4)'
+        )
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_insert_select(self):
+        expression = Insert(
+            (Field(field1, table1), Field(field2, table1)),
+            values=Select((Field(field3, table3), Field(field4, table4)))
+        )
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement,
+            'INSERT INTO "table 1" (field1, field2) SELECT "table 3".field3, '
+            '"table 4".field4 FROM "table 3", "table 4"'
+        )
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_update(self):
+        expression = Update({field1: elem1, Func1(): Func2()}, table=Func1())
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertTrue(statement in (
+            'UPDATE func1() SET field1=elem1, func1()=func2()',
+            'UPDATE func1() SET func1()=func2(), field1=elem1'
+        ), statement)
+
+    def test_compile_update_with_fields(self):
+        expression = Update({Field(field1, table1): elem1}, table=table1)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'UPDATE "table 1" SET field1=elem1')
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_update_with_fields_to_escape(self):
+        expression = Update({Field('field x', table1): elem1}, table=table1)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'UPDATE "table 1" SET "field x"=elem1')
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_update_with_fields_as_raw_string(self):
+        expression = Update({r'field 1': elem1}, table=table2)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'UPDATE "table 2" SET "field 1"=elem1')
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_update_with_fields_as_literal_string(self):
+        expression = Update({'field 1': elem1}, table=table2)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'UPDATE "table 2" SET "field 1"=elem1')
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_update_where(self):
+        expression = Update({field1: elem1}, Func1(), Func2())
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement, 'UPDATE func2() SET field1=elem1 WHERE func1()')
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_update_auto_table(self):
+        expression = Update({Field(field1, table1): elem1})
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'UPDATE "table 1" SET field1=elem1')
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_update_auto_table_default(self):
+        expression = Update({Field(field1): elem1}, default_table=table1)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(statement, 'UPDATE "table 1" SET field1=elem1')
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_update_auto_table_unknown(self):
+        expression = Update({Field(field1): elem1})
+        self.assertRaises(CompileError, txorm_compile, expression)
+
+    def test_update_with_strings(self):
+        expression = Update({field1: elem1}, "1 = 2", table1)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement, 'UPDATE "table 1" SET field1=elem1 WHERE 1 = 2')
+        self.assertEqual(state.parameters, [])
+
+    def test_update_contexts(self):
+        set_left, set_right, where, table = track_contexts(4)
+        expression = Update({set_left: set_right}, where, table)
+        txorm_compile(expression)
+        self.assertEqual(set_left.context, FIELD_NAME)
+        self.assertEqual(set_right.context, FIELD_NAME)
+        self.assertEqual(where.context, EXPR)
+        self.assertEqual(table.context, TABLE)
 
 
 def assert_variables(test, checked, expected):
