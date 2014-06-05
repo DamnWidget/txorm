@@ -1245,6 +1245,59 @@ class CompileTest(unittest.TestCase):
         self.assertEqual(statement, 'func1()>>?')
         assert_variables(self, state.parameters, [Variable('value')])
 
+    def test_compile_in(self):
+        expression = In(Func1(), b('value'))
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEquals(statement, 'func1() IN (?)')
+        assert_variables(self, state.parameters, [RawStrVariable(b('value'))])
+
+        expression = In(Func1(), elem1)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEquals(statement, 'func1() IN (elem1)')
+        self.assertEquals(state.parameters, [])
+
+    def test_compile_and(self):
+        expression = And(elem1, elem2, And(elem3, elem4))
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEquals(statement, 'elem1 AND elem2 AND elem3 AND elem4')
+        self.assertEquals(state.parameters, [])
+
+        expression = Func1() & 'value'
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEquals(statement, 'func1() AND ?')
+        assert_variables(self, state.parameters, [Variable('value')])
+
+    def test_compile_or(self):
+        expression = Or(elem1, elem2, Or(elem3, elem4))
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEquals(statement, 'elem1 OR elem2 OR elem3 OR elem4')
+        self.assertEquals(state.parameters, [])
+
+        expression = Func1() | 'value'
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEquals(statement, 'func1() OR ?')
+        assert_variables(self, state.parameters, [Variable('value')])
+
+    def test_compile_and_with_strings(self):
+        expression = And('elem1', 'elem2')
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEquals(statement, 'elem1 AND elem2')
+        self.assertEquals(state.parameters, [])
+
+    def test_compile_or_with_strings(self):
+        expression = Or('elem1', 'elem2')
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEquals(statement, 'elem1 OR elem2')
+        self.assertEquals(state.parameters, [])
+
 
 def assert_variables(test, checked, expected):
     test.assertEqual(len(checked), len(expected))
