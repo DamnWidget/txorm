@@ -29,7 +29,9 @@ from .tables import Join, LeftJoin, RightJoin, JoinExpression
 from .comparable import Or, And, Eq, Ne, Gt, Ge, Lt, Le, Like, In
 from .tables import NaturalJoin, NaturalLeftJoin, NaturalRightJoin
 from .base import CompileError, Compile, txorm_compile, txorm_compile_python
-from .comparable import CompoundOperator, NonAssocBinaryOperator
+from .comparable import (
+    CompoundOperator, NonAssocBinaryOperator, BinaryOperator
+)
 from txorm.variable import (
     Variable, RawStrVariable, UnicodeVariable, DateTimeVariable,
     DateVariable, TimeVariable, TimeDeltaVariable, BoolVariable,
@@ -404,6 +406,19 @@ def compile_non_assoc_binary_operator(compile, expression, state):
 
 
 # compile operators
+@txorm_compile.when(BinaryOperator)
+@txorm_compile_python.when(BinaryOperator)
+def compile_binary_operator(compile, expression, state):
+    """Compile binary operators
+    """
+
+    return '{}{}{}'.format(
+        compile(expression.expressions[0], state),
+        expression.operator,
+        compile(expression.expressions[1], state),
+    )
+
+
 @txorm_compile.when(Eq)
 def compile_eq(compile, eq, state):
     """Compile Eq operator
@@ -414,6 +429,19 @@ def compile_eq(compile, eq, state):
 
     return '{} = {}'.format(
         compile(eq.expressions[0], state), compile(eq.expressions[1], state)
+    )
+
+
+@txorm_compile.when(Ne)
+def compile_ne(compile, ne, state):
+    """Compile Ne operator
+    """
+
+    if ne.expressions[1] is None:
+        return '{} IS NOT NULL'.format(compile(ne.expressions[0], state))
+
+    return '{} != {}'.format(
+        compile(ne.expressions[0], state), compile(ne.expressions[1], state)
     )
 
 
