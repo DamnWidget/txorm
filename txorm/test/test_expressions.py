@@ -15,9 +15,9 @@ from txorm import Undef
 from txorm.variable import Variable
 from txorm.compiler.state import State
 from txorm.compiler.tables import Join
-from txorm.compiler import CompileError
 from txorm.compiler import TABLE, EXPR, FIELD
 from txorm.compiler.fields import Field, Alias
+from txorm.compiler import CompileError, NoTableError
 from txorm.compiler.expressions import FromExpression
 from txorm.compiler.base import txorm_compile, Compile
 from txorm.compiler.tables import JoinExpression, Table
@@ -848,13 +848,53 @@ class CompileTest(unittest.TestCase):
         )
         self.assertEqual(state.parameters, [])
 
-    def test_compile_insert_with_columns_to_escape(self):
+    def test_compile_insert_with_fields_to_escape(self):
         expression = Insert({Field('field 1', table1): elem1}, table2)
         state = State()
         statement = txorm_compile(expression, state)
         self.assertEquals(
             statement, 'INSERT INTO "table 2" ("field 1") VALUES (elem1)')
         self.assertEquals(state.parameters, [])
+
+    def test_compile_insert_with_fields_as_raw_strings(self):
+        expression = Insert({r'field 1': elem1}, table2)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement, 'INSERT INTO "table 2" ("field 1") VALUES (elem1)'
+        )
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_insert_with_fields_as_literal_strings(self):
+        expression = Insert({'field 1': elem1}, table2)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement, 'INSERT INTO "table 2" ("field 1") VALUES (elem1)'
+        )
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_insert_auto_table(self):
+        expression = Insert({Field(field1, table1): elem1})
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement, 'INSERT INTO "table 1" (field1) VALUES (elem1)'
+        )
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_insert_auto_table_default(self):
+        expression = Insert({Field(field1): elem1}, default_table=table1)
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEqual(
+            statement, 'INSERT INTO "table 1" (field1) VALUES (elem1)'
+        )
+        self.assertEqual(state.parameters, [])
+
+    def test_compile_insert_auto_table_unknown(self):
+        expression = Insert({Field(field1): elem1})
+        self.assertRaises(NoTableError, txorm_compile, expression)
 
 
 def assert_variables(test, checked, expected):
