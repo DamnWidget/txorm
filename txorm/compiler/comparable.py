@@ -4,11 +4,25 @@
 
 from __future__ import unicode_literals
 
+import functools
+
 from txorm import Undef
 from .prefixes import Neg
 from txorm.variable import Variable
 from txorm.compat import u, text_type
 from .expressions import ExpressionError, Expression
+
+
+def extract_variable(func):
+
+    @functools.wraps(func)
+    def wrapper(self, other):
+        if not isinstance(other, (Expression, Variable)):
+            other = getattr(self, 'variable_factory', Variable)(value=other)
+
+        return func(self, other)
+
+    return wrapper
 
 
 class Comparable(object):
@@ -32,70 +46,57 @@ class Comparable(object):
             other = getattr(self, 'variable_factory', Variable)(value=other)
         return Ne(self, other)
 
+    @extract_variable
     def __gt__(self, other):
-        if not isinstance(other, (Expression, Variable)):
-            other = getattr(self, 'variable_factory', Variable)(value=other)
         return Gt(self, other)
 
+    @extract_variable
     def __ge__(self, other):
-        if not isinstance(other, (Expression, Variable)):
-            other = getattr(self, 'variable_factory', Variable)(value=other)
         return Ge(self, other)
 
+    @extract_variable
     def __lt__(self, other):
-        if not isinstance(other, (Expression, Variable)):
-            other = getattr(self, 'variable_factory', Variable)(value=other)
         return Lt(self, other)
 
+    @extract_variable
     def __le__(self, other):
-        if not isinstance(other, (Expression, Variable)):
-            other = getattr(self, 'variable_factory', Variable)(value=other)
         return Le(self, other)
 
+    @extract_variable
     def __rshift__(self, other):
-        if not isinstance(other, (Expression, Variable)):
-            other = getattr(self, 'variable_factory', Variable)(value=other)
         return RShift(self, other)
 
+    @extract_variable
     def __lshift__(self, other):
-        if not isinstance(other, (Expression, Variable)):
-            other = getattr(self, 'variable_factory', Variable)(value=other)
         return LShift(self, other)
 
+    @extract_variable
     def __and__(self, other):
-        if not isinstance(other, (Expression, Variable)):
-            other = getattr(self, 'variable_factory', Variable)(value=other)
         return And(self, other)
 
+    @extract_variable
     def __or__(self, other):
-        if not isinstance(other, (Expression, Variable)):
-            other = getattr(self, 'variable_factory', Variable)(value=other)
         return Or(self, other)
 
+    @extract_variable
     def __add__(self, other):
-        if not isinstance(other, (Expression, Variable)):
-            other = getattr(self, 'variable_factory', Variable)(value=other)
         return Add(self, other)
 
+    @extract_variable
     def __sub__(self, other):
-        if not isinstance(other, (Expression, Variable)):
-            other = getattr(self, 'variable_factory', Variable)(value=other)
         return Sub(self, other)
 
+    @extract_variable
     def __mul__(self, other):
-        if not isinstance(other, (Expression, Variable)):
-            other = getattr(self, 'variable_factory', Variable)(value=other)
         return Mul(self, other)
 
+    @extract_variable
     def __div__(self, other):
-        if not isinstance(other, (Expression, Variable)):
-            other = getattr(self, 'variable_factory', Variable)(value=other)
         return Div(self, other)
 
+    @extract_variable
     def __mod__(self, other):
         from .operators import Mod
-        if not isinstance(other, (Expression, Variable)):
-            other = getattr(self, 'variable_factory', Variable)(value=other)
         return Mod(self, other)
 
     def __neg__(self):
@@ -112,9 +113,8 @@ class Comparable(object):
                     others[i] = variable_factory(value=other)
         return In(self, others)
 
+    @extract_variable
     def like(self, other, escape=Undef, case_sensitive=None):
-        if not isinstance(other, (Expression, Variable)):
-            other = getattr(self, 'variable_factory', Variable)(value=other)
         return Like(self, other, escape, case_sensitive)
 
     def lower(self):
