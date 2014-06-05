@@ -1298,6 +1298,46 @@ class CompileTest(unittest.TestCase):
         self.assertEquals(statement, 'elem1 OR elem2')
         self.assertEquals(state.parameters, [])
 
+    def test_compile_like(self):
+        expression = Like(Func1(), b('value'))
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEquals(statement, 'func1() LIKE ?')
+        assert_variables(self, state.parameters, [RawStrVariable(b('value'))])
+
+        expression = Func1().like('Hello')
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEquals(statement, 'func1() LIKE ?')
+        assert_variables(self, state.parameters, [Variable('Hello')])
+
+    def test_compile_like_escape(self):
+        expression = Like(Func1(), b('value'), b('!'))
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEquals(statement, 'func1() LIKE ? ESCAPE ?')
+        assert_variables(
+            self, state.parameters,
+            [RawStrVariable(b('value')), RawStrVariable(b('!'))]
+        )
+
+        expression = Func1().like('Hello', b('!'))
+        state = State()
+        statement = txorm_compile(expression, state)
+        self.assertEquals(statement, 'func1() LIKE ? ESCAPE ?')
+        assert_variables(
+            self, state.parameters,
+            [Variable('Hello'), RawStrVariable(b('!'))]
+        )
+
+    def test_compile_like_compareable_case(self):
+        expression = Func1().like('Hello')
+        self.assertEquals(expression.case_sensitive, None)
+        expression = Func1().like('Hello', case_sensitive=True)
+        self.assertEquals(expression.case_sensitive, True)
+        expression = Func1().like('Hello', case_sensitive=False)
+        self.assertEquals(expression.case_sensitive, False)
+
 
 def assert_variables(test, checked, expected):
     test.assertEqual(len(checked), len(expected))

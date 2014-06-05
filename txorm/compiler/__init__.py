@@ -457,6 +457,25 @@ def compile_in(compile, expression, state):
     )
 
 
+@txorm_compile.when(Like)
+def compile_like(compile, like, state, operator=None):
+    """Compile a LIKE operator
+    """
+
+    statement = '{}{}{}'.format(
+        compile(like.expressions[0], state),
+        operator if operator is not None else like.operator,
+        compile(like.expressions[1], state)
+    )
+
+    if like.escape is not Undef:
+        statement = '{} ESCAPE {}'.format(
+            statement, compile(like.escape, state)
+        )
+
+    return statement
+
+
 # joins
 @txorm_compile.when(JoinExpression)
 def compile_join(compile, join, state):

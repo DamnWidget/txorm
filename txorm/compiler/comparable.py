@@ -16,11 +16,11 @@ from .expressions import ExpressionError, Expression
 def extract_variable(func):
 
     @functools.wraps(func)
-    def wrapper(self, other):
+    def wrapper(self, other, *args, **kwargs):
         if not isinstance(other, (Expression, Variable)):
             other = getattr(self, 'variable_factory', Variable)(value=other)
 
-        return func(self, other)
+        return func(self, other, *args, **kwargs)
 
     return wrapper
 
@@ -262,16 +262,17 @@ class Like(BinaryOperator):
     :param expression1: the first expression
     :param expression2: the second expression
     :param escape: scape statement
-    :param sensitive: is case sensitive?
+    :param case_sensitive: is case sensitive?
     """
 
     __slots__ = ('escape', 'case_sensitive')
     operator = ' LIKE '
 
-    def __init__(self, expression1, expression2, escape=Undef, sensitive=None):
+    def __init__(
+            self, expression1, expression2, escape=Undef, case_sensitive=None):
         self.expressions = (expression1, expression2)
         self.escape = escape
-        self.case_sensitive = sensitive
+        self.case_sensitive = case_sensitive
 
 
 class In(BinaryOperator):
