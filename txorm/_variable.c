@@ -47,7 +47,7 @@ Variable_init(VariableObject *self, PyObject *args, PyObject *kwargs)
 {
     static char *kwlist[] = {
         "value", "value_factory", "from_db", "allow_none", "field",
-        "validator", NULL
+        "validator", "validator_factory", "validator_attribute", NULL
     };
 
     PyObject *value = Undef;
@@ -56,11 +56,13 @@ Variable_init(VariableObject *self, PyObject *args, PyObject *kwargs)
     PyObject *allow_none = Py_True;
     PyObject *field = Py_None;
     PyObject *validator = Py_None;
+    PyObject *validator_factory = Py_None;
+    PyObject *validator_attribute = Py_None;
     PyObject *tmp;
 
     if (!PyArg_ParseTupleAndKeywords(
-            args, kwargs, "|OOOOOO", kwlist, &value, &value_factory, &from_db,
-            &allow_none, &field, &validator))
+            args, kwargs, "|OOOOOOOO", kwlist, &value, &value_factory, &from_db,
+            &allow_none, &field, &validator, &validator_factory, &value_factory))
         return -1;
 
     /* if allow_none is not True: */
@@ -93,6 +95,12 @@ Variable_init(VariableObject *self, PyObject *args, PyObject *kwargs)
         /*  self._validator = validator */
         Py_INCREF(validator);
         self->_validator = validator;
+        /*  self._validator_factory = validator_factory */
+        Py_INCREF(validator_factory);
+        self->_validator_factory = validator_factory;
+        /*  self._validator_attribute = validator_attribute */
+        Py_INCREF(validator_attribute);
+        self->_validator_attribute = validator_attribute;
     }
 
     /* self.field = field */
@@ -116,7 +124,9 @@ Variable_traverse(VariableObject *self, visitproc visit, void *arg)
 {
     Py_VISIT(self->_value);
     Py_VISIT(self->_allow_none);
-    // Py_VISIT(self->_validator);
+    Py_VISIT(self->_validator);
+    Py_VISIT(self->_validator_factory);
+    Py_VISIT(self->_validator_attribute);
     Py_VISIT(self->field);
     return 0;
 }
@@ -127,6 +137,8 @@ Variable_clear(VariableObject *self)
     Py_CLEAR(self->_value);
     Py_CLEAR(self->_allow_none);
     Py_CLEAR(self->_validator);
+    Py_CLEAR(self->_validator_factory);
+    Py_CLEAR(self->_validator_attribute);
     Py_CLEAR(self->field);
     return 0;
 }
@@ -222,9 +234,30 @@ Variable_set(VariableObject *self, PyObject *args, PyObject *kwargs)
 
     /* if from_db is False and self._validator is not None: */
     if (!PyObject_IsTrue(from_db) && self->_validator != Py_None) {
-        /*  value = self.validator(value) */
-        value = PyObject_CallFunctionObjArgs(self->_validator, value, NULL);
-        CATCH(NULL, value);
+        /*
+            value = self._validator(
+                self._validator_factory and self._validator_factory(),
+                self._validator_attribute, value
+            )
+         */
+        PyObject *validator_object, *tmp;
+        if (self->_validator_factory == Py_None)    {
+            Py_INCREF(Py_None);
+            validator_object = Py_None;
+        } else{
+            CATCH(NULL, validator_object = PyObject_CallFunctionObjArgs(
+                self->_validator_factory, NULL
+            ));
+        }
+        tmp = PyObject_CallFunctionObjArgs(
+            self->_validator, validator_object, self->_validator_attribute,
+            value, NULL
+        );
+        Py_DECREF(validator_object);
+        CATCH(NULL, tmp);
+
+        Py_DECREF(value);
+        value = tmp;
     }
 
     /* if value is None: */

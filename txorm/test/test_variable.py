@@ -124,36 +124,51 @@ class VariableTest(unittest.TestCase):
     def test_set_with_validator(self):
         args = []
 
-        def validator(value):
-            args.append((value,))
+        def validator(obj, attr, value):
+            args.append((obj, attr, value))
             return value
 
         variable = DummyVariable(validator=validator)
         variable.set(3)
-        self.assertEqual(args, [(3,)])
+        self.assertEqual(args, [(None, None, 3)])
+
+    def test_set_with_validator_and_validator_arguments(self):
+        args = []
+
+        def validator(obj, attr, value):
+            args.append((obj, attr, value))
+            return value
+
+        variable = DummyVariable(
+            validator=validator,
+            validator_factory=lambda: 1,
+            validator_attribute=2
+        )
+        variable.set(3)
+        self.assertEqual(args, [(1, 2, 3)])
 
     def test_set_with_validator_raising_error(self):
         args = []
 
-        def validator(value):
-            args.append((value,))
+        def validator(obj, attr, value):
+            args.append((obj, attr, value))
             raise ZeroDivisionError()
 
         variable = DummyVariable(validator=validator)
         self.assertRaises(ZeroDivisionError, variable.set, marker)
-        self.assertEqual(args, [(marker,)])
+        self.assertEqual(args, [(None, None, marker)])
         self.assertEqual(variable.get(), None)
 
     def test_set_with_validator_changing_value(self):
         args = []
 
-        def validator(value):
-            args.append((value,))
+        def validator(obj, attr, value):
+            args.append((obj, attr, value))
             return 42
 
         variable = DummyVariable(validator=validator)
         variable.set(marker)
-        self.assertEqual(args, [(marker,)])
+        self.assertEqual(args, [(None, None, marker)])
         self.assertEqual(variable.get(), ('g', ('s', 42)))
 
     def test_set_from_db_wont_call_validator(self):

@@ -58,7 +58,8 @@ class Variable(object):
     field = None
 
     def __init__(self, value=Undef, value_factory=Undef,
-                 from_db=False, allow_none=True, field=None, validator=None):
+                 from_db=False, allow_none=True, field=None, validator=None,
+                 validator_factory=None, validator_attribute=None):
 
         if allow_none is not True:
             self._allow_none = False
@@ -70,6 +71,8 @@ class Variable(object):
 
         if validator is not None:
             self._validator = validator
+            self._validator_factory = validator_factory
+            self._validator_attribute = validator_attribute
 
         self.field = field
 
@@ -111,7 +114,10 @@ class Variable(object):
         """
 
         if from_db is False and self._validator is not None:
-            value = self._validator(value)
+            value = self._validator(
+                self._validator_factory and self._validator_factory(),
+                self._validator_attribute, value
+            )
 
         if value is None:
             if self._allow_none is False:
