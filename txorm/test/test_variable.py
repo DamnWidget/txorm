@@ -237,7 +237,7 @@ class DecimalVariableTest(unittest.TestCase):
         self.assertEqual(variable.get(to_db=True), '1.1')
 
 
-class FrationVariableTest(unittest.TestCase):
+class FractionVariableTest(unittest.TestCase):
 
     def test_set_get(self):
         variable = FractionVariable()
