@@ -10,6 +10,16 @@ class TxormError(Exception):
     """
 
 
+class CompileError(TxormError):
+    """Raised on compile exceptions
+    """
+
+
+class NoTableError(CompileError):
+    """Raised when notable is avaibale on compile time
+    """
+
+
 class NoneError(TxormError):
     """Raised when None is not allowed for a variable value
     """

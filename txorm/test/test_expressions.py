@@ -17,7 +17,7 @@ from txorm.compiler.state import State
 from txorm.compiler.suffixes import Asc, Desc
 from txorm.compiler.fields import Field, Alias
 from txorm.compiler.prefixes import Not, Exists, Neg
-from txorm.compiler import CompileError, NoTableError
+from txorm.exceptions import CompileError, NoTableError
 from txorm.compiler.tables import JoinExpression, Table
 from txorm.compiler.plain_sql import SQLRaw, SQLToken, SQL
 from txorm.compat import _PY3, b, u, binary_type, text_type

@@ -7,17 +7,13 @@ from __future__ import unicode_literals
 from weakref import WeakKeyDictionary
 
 from txorm import c_extensions_available
-from txorm.compat import binary_type, text_type, b
+from txorm.exceptions import CompileError
+from txorm.compat import binary_type, text_type
 
 from .state import State
 from .plain_sql import SQLRaw, SQLToken
 
 MAX_PRECEDENCE = 1000
-
-
-class CompileError(Exception):
-    """Raised on compile exceptions
-    """
 
 
 def _when(self, types):

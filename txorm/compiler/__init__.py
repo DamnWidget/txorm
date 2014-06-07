@@ -24,13 +24,14 @@ from .plain_sql import SQL, SQLToken
 from .comparable import LShift, RShift
 from .comparable import Func, NamedFunc, Cast
 from .comparable import Add, Sub, Mul, Div, Mod, Neg
+from txorm.exceptions import CompileError, NoTableError
 from .expressions import Union, Except, Intersect, Distinct
 from .tables import Join, LeftJoin, RightJoin, JoinExpression
+from .base import Compile, txorm_compile, txorm_compile_python
 from .tables import NaturalJoin, NaturalLeftJoin, NaturalRightJoin
 from .expressions import Select, Insert, Update, Delete, SetExpression
 from .expressions import Expression, PrefixExpression, SuffixExpression
 from .comparable import Or, And, Eq, Ne, Gt, Ge, Lt, Le, Like, In, Count
-from .base import CompileError, Compile, txorm_compile, txorm_compile_python
 from .comparable import (
     CompoundOperator, NonAssocBinaryOperator, BinaryOperator
 )
@@ -48,12 +49,7 @@ FIELD_PREFIX = Context('FIELD_PREFIX')
 FIELD_NAME = Context('FIELD_NAME')
 SELECT = Context('SELECT')
 
-is_safe_token = re.compile("^[a-zA-Z][a-zA-Z0-9_]*$").match
-
-
-class NoTableError(CompileError):
-    """Raised when notable is avaibale on compile time
-    """
+is_safe_token = re.compile('^[a-zA-Z][a-zA-Z0-9_]*$').match
 
 
 # basic expression
