@@ -25,8 +25,8 @@ class NoneError(TxormError):
     """
 
 
-class FieldInfoError(TxormError):
-    """Raised when errors on fields data are detected
+class ObjectDataError(TxormError):
+    """Raised when errors on object data are detected
     """
 
 
