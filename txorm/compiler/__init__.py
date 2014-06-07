@@ -18,6 +18,7 @@ from txorm.compat import text_type, binary_type, integer_types, _PY3
 from txorm import Undef
 from .base import Context
 from .tables import Table
+from .suffixes import Asc, Desc
 from .fields import Field, Alias
 from .expressions import AutoTables
 from .plain_sql import SQL, SQLToken
@@ -909,5 +910,6 @@ __all__ = [
     'SQL', 'LShift', 'RShift', 'Join', 'LeftJoin', 'RightJoin', 'NaturalJoin',
     'NaturalLeftJoin', 'NaturalRightJoin', 'Union', 'Except', 'Intersect',
     'Or', 'And', 'Eq', 'Ne', 'Gt', 'Ge', 'Lt', 'Le', 'Like', 'In', 'Mul',
-    'Div', 'Mod', 'Add', 'Sub', 'NoTableError'
+    'Div', 'Mod', 'Add', 'Sub', 'NoTableError', 'Field', 'Alias',
+    'Asc', 'Desc'
 ]

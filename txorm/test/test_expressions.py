@@ -2,8 +2,8 @@
 # Copyright (c) 2014 Oscar Campos <oscar.campos@member.fsf.org>
 # See LICENSE for details
 
-'''TxORM Expressions Unit Tests
-'''
+"""TxORM Expressions Unit Tests
+"""
 
 from __future__ import unicode_literals
 
@@ -16,11 +16,11 @@ from txorm.variable import Variable
 from txorm.compiler.state import State
 from txorm.compiler.suffixes import Asc, Desc
 from txorm.compiler.fields import Field, Alias
+from txorm.compat import _PY3, b, u, text_type
 from txorm.compiler.prefixes import Not, Exists, Neg
 from txorm.exceptions import CompileError, NoTableError
 from txorm.compiler.tables import JoinExpression, Table
 from txorm.compiler.plain_sql import SQLRaw, SQLToken, SQL
-from txorm.compat import _PY3, b, u, binary_type, text_type
 from txorm.compiler.expressions import FromExpression, Distinct
 from txorm.compiler.comparable import Count, Max, Min, Avg, Cast
 from txorm.compiler.comparable import Upper, Coalesce, Sum, Lower
@@ -37,8 +37,7 @@ from txorm.compiler.tables import (
     Join, LeftJoin, RightJoin, NaturalJoin, NaturalLeftJoin, NaturalRightJoin)
 from txorm.variable import (
     RawStrVariable, UnicodeVariable, IntVariable, BoolVariable, FloatVariable,
-    DecimalVariable, DateTimeVariable, DateVariable, TimeVariable,
-    TimeDeltaVariable
+    DateTimeVariable, DateVariable, TimeVariable, TimeDeltaVariable
 )
 
 

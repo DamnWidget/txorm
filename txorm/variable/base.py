@@ -48,6 +48,7 @@ class Variable(object):
         where the first and unique value is the value to validate, if the value
         is not acceptable an error should be raised, the value is returned
         otherwise
+    :param field: the field that this variable represents
     """
 
     _value = Undef
