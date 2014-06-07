@@ -18,13 +18,12 @@ from txorm.compat import text_type, binary_type, integer_types, _PY3
 from txorm import Undef
 from .base import Context
 from .tables import Table
-from .suffixes import Desc
 from .fields import Field, Alias
 from .expressions import AutoTables
 from .plain_sql import SQL, SQLToken
 from .comparable import LShift, RShift
 from .comparable import Func, NamedFunc, Cast
-from .comparable import Add, Sub, Mul, Div, Mod
+from .comparable import Add, Sub, Mul, Div, Mod, Neg
 from .expressions import Union, Except, Intersect, Distinct
 from .tables import Join, LeftJoin, RightJoin, JoinExpression
 from .tables import NaturalJoin, NaturalLeftJoin, NaturalRightJoin
@@ -156,7 +155,7 @@ def compile_none(compile, expression, state):
 
 
 @txorm_compile_python.when(
-    float, type(None), text_type, binary_type, integer_types)
+    float, type(None), text_type, binary_type, *integer_types)
 def compile_python_builtin(compile, expression, state):
     """Compile builting python (2 and 3) types into the right representation
     """
@@ -198,6 +197,13 @@ def compile_cast(compile, cast, state):
     field = compile(cast.field, state)
     state.pop()
     return 'CAST({} AS {})'.format(field, cast.type)
+
+
+@txorm_compile_python.when(Neg)
+def compile_python_neg(compile, neg, state):
+    """Compile Neg to python right representation
+    """
+    return '-{}'.format(compile(neg.expression, state, raw=True))
 
 
 # distinct expression
@@ -571,6 +577,15 @@ def compile_eq(compile, eq, state):
     )
 
 
+@txorm_compile_python.when(Eq)
+def compile_python_eq(compile, eq, state):
+    """Compile Eq operator to the right python representation
+    """
+    return '{} == {}'.format(
+        compile(eq.expressions[0], state), compile(eq.expressions[1], state)
+    )
+
+
 @txorm_compile.when(Ne)
 def compile_ne(compile, ne, state):
     """Compile Ne operator
@@ -592,6 +607,18 @@ def compile_in(compile, expression, state):
     expression1 = compile(expression.expressions[0], state)
     state.precedence = 0  # enforce parentehsis here
     return '{} IN ({})'.format(
+        expression1, compile(expression.expressions[1], state)
+    )
+
+
+@txorm_compile_python.when(In)
+def compile_python_in(compile, expression, state):
+    """Compile In operator into the right python representation
+    """
+
+    expression1 = compile(expression.expressions[0], state)
+    state.precedence = 0  # enforce parentehsis here
+    return '{} in ({},)'.format(
         expression1, compile(expression.expressions[1], state)
     )
 
@@ -693,11 +720,8 @@ def compile_sql_token(compile, expression, state):
 
 
 @txorm_compile_python.when(SQLToken)
-def compie_sql_token(compile, expression, state):
-    if is_safe_token(expression) and not compile.is_reserved_word(expression):
-        return expression
-
-    return '"{}"'.format(expression.replace('"', '""'))
+def compile_python_sql_token(compile, expression, state):
+    return expression
 
 
 @txorm_compile.when(SQL)
