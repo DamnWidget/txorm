@@ -5,6 +5,7 @@
 from __future__ import unicode_literals
 
 from txorm import Undef
+from .fields import Alias
 from .expressions import Expression, FromExpression, ExpressionError
 
 
@@ -30,7 +31,7 @@ class JoinExpression(FromExpression):
     """
 
     __slots__ = ('left', 'right', 'on')
-    operator = ('unknown')
+    operator = '(unknown)'
 
     def __init__(self, arg1, arg2=Undef, on=Undef):
         # http://www.postgresql.org/docs/8.1/interactive/explicit-joins.html
@@ -39,7 +40,7 @@ class JoinExpression(FromExpression):
             self.right = arg1
             self.on = on
         elif (not isinstance(arg2, Expression)
-                or isinstance(arg2, (FromExpression,))):
+                or isinstance(arg2, (FromExpression, Alias))):
             self.left = arg1
             self.right = arg2
             self.on = on

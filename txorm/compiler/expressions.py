@@ -206,7 +206,7 @@ class AutoTables(Expression):
 
     __slots__ = ('expression', 'tables', 'replace')
 
-    def __init__(self, expression, tables, replace=True):
+    def __init__(self, expression, tables, replace=False):
         assert type(tables) in (list, tuple)
         self.expression = expression
         self.tables = tables

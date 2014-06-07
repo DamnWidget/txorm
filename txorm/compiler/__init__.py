@@ -17,17 +17,20 @@ from txorm.compat import text_type, binary_type, integer_types, _PY3
 
 from txorm import Undef
 from .base import Context
+from .tables import Table
+from .suffixes import Desc
 from .fields import Field, Alias
-from .expressions import Expression
+from .expressions import AutoTables
 from .plain_sql import SQL, SQLToken
 from .comparable import LShift, RShift
-from .comparable import Func, NamedFunc
+from .comparable import Func, NamedFunc, Cast
 from .comparable import Add, Sub, Mul, Div, Mod
-from .expressions import Union, Except, Intersect
-from .expressions import Select, Insert, Update, Delete
+from .expressions import Union, Except, Intersect, Distinct
 from .tables import Join, LeftJoin, RightJoin, JoinExpression
-from .comparable import Or, And, Eq, Ne, Gt, Ge, Lt, Le, Like, In
 from .tables import NaturalJoin, NaturalLeftJoin, NaturalRightJoin
+from .expressions import Select, Insert, Update, Delete, SetExpression
+from .expressions import Expression, PrefixExpression, SuffixExpression
+from .comparable import Or, And, Eq, Ne, Gt, Ge, Lt, Le, Like, In, Count
 from .base import CompileError, Compile, txorm_compile, txorm_compile_python
 from .comparable import (
     CompoundOperator, NonAssocBinaryOperator, BinaryOperator
@@ -52,6 +55,14 @@ is_safe_token = re.compile("^[a-zA-Z][a-zA-Z0-9_]*$").match
 class NoTableError(CompileError):
     """Raised when notable is avaibale on compile time
     """
+
+
+# basic expression
+@txorm_compile.when(Expression)
+def compile_python_unsupported(compile, expression, state):
+    raise CompileError('Can not compile python expression with {!r}'.format(
+        type(expression)
+    ))
 
 
 # compile functions
@@ -178,6 +189,25 @@ def compile_python_variable(compile, variable, state):
     return '_{}'.format(index)
 
 
+@txorm_compile.when(Cast)
+def compile_cast(compile, cast, state):
+    """Compile CAST function
+    """
+
+    state.push('context', EXPR)
+    field = compile(cast.field, state)
+    state.pop()
+    return 'CAST({} AS {})'.format(field, cast.type)
+
+
+# distinct expression
+@txorm_compile.when(Distinct)
+def compile_distinct(compile, distinct, state):
+    """Compile a DISTINCT prefix
+    """
+    return 'DISTINCT {}'.format(compile(distinct.expression, state))
+
+
 # compile fields
 @txorm_compile.when(Field)
 def compile_field(compile, field, state):
@@ -216,6 +246,24 @@ def compile_python_field(compile, field, state):
     index = len(state.parameters)
     state.parameters.append(field)
     return 'get_field(_{})'.format(index)
+
+
+@txorm_compile.when(Count)
+def compile_count(compile, count, state):
+    """Compile COUNT function
+    """
+
+    if count.field is not Undef:
+        state.push('context', EXPR)
+        field = compile(count.field, state)
+        state.pop()
+
+        if count.distinct:
+            return 'COUNT(DISTINCT {})'.format(field)
+
+        return 'COUNT({})'.format(field)
+
+    return 'COUNT(*)'
 
 
 # compile expressions
@@ -405,6 +453,97 @@ def compile_non_assoc_binary_operator(compile, expression, state):
     return '{}{}{}'.format(expression1, expression.operator, expression2)
 
 
+# from expressions
+@txorm_compile.when(Table)
+def compile_table(compile, table, state):
+    """Compile a table expression
+    """
+
+    if table.compile_id != id(compile):
+        table.compile_cache = compile(table.name, state, token=True)
+        table.compile_id = id(compile)
+
+    return table.compile_cache
+
+
+# alias expressions
+@txorm_compile.when(Alias)
+def compile_alias(compile, alias, state):
+    """Compule an aias
+    """
+
+    name = compile(alias.name, state, token=True)
+    if state.context is FIELD or state.context is TABLE:
+        return '{} AS {}'.format(compile(alias.expression, state), name)
+
+    return name
+
+
+# set expressions
+@txorm_compile.when(SetExpression)
+def compile_set_expression(compile, expression, state):
+    """Compile a set expression
+    """
+
+    # usually, databases have trouble using fully qualified column names
+    # when ORDER BY is present. We transform pure column names into aliases
+    # and use them in the ORDER BY to pevent this
+    aliases = {}
+    for subexpression in expression.expressions:
+        if isinstance(subexpression, Select):
+            fields = subexpression.fields
+            if not isinstance(fields, (tuple, list)):
+                fields = [fields]
+            else:
+                fields = list(fields)
+
+            for i, field in enumerate(fields):
+                if field not in aliases:
+                    if isinstance(field, Field):
+                        aliases[field] = fields[i] = Alias(field)
+                    elif isinstance(field, Alias):
+                        aliases[field.expression] = field
+
+            subexpression.fields = fields
+
+    state.push('context', SELECT)
+    # In the statement:
+    #   SELECT foo UNION SELECT bar LIMIT 1
+    # The LIMIT 1 applies to the union results, not the SELECT bar
+    # This ensures that parentheses will be placed around the
+    # sub-selects in the expression.
+    state.precedence += 0.5
+    operator = expression.operator
+    if expression.all:
+        operator += 'ALL '
+
+    statement = compile(expression.expressions, state, join=operator)
+    state.precedence -= 0.5
+    if expression.order_by is not Undef:
+        state.context = FIELD_NAME
+        if state.aliases is None:
+            state.push('aliases', aliases)
+        else:
+            # previously defined aliases have precedence
+            aliases.update(state.aliases)
+            state.aliases = aliases
+            aliases = None
+
+        statement += ' ORDER BY {}' .format(
+            compile(expression.order_by, state)
+        )
+        if aliases is not None:
+            state.pop()
+
+    if expression.limit is not Undef:
+        statement += ' LIMIT {}'.format(expression.limit)
+    if expression.offset is not Undef:
+        statement += ' OFFSET {}'.format(expression.offset)
+
+    state.pop()
+    return statement
+
+
 # compile operators
 @txorm_compile.when(BinaryOperator)
 @txorm_compile_python.when(BinaryOperator)
@@ -476,6 +615,41 @@ def compile_like(compile, like, state, operator=None):
     return statement
 
 
+# prefix and suffix
+@txorm_compile.when(PrefixExpression)
+def compile_prefix(compile, expression, state):
+    """Compile a prefix expression
+    """
+    return '{} {}'.format(
+        expression.prefix, compile(expression.expression, state, raw=True))
+
+
+@txorm_compile.when(SuffixExpression)
+def compile_suffix(compile, expression, state):
+    """Compile a suffix  expression
+    """
+    return '{} {}'.format(
+        compile(expression.expression, state, raw=True), expression.suffix
+    )
+
+
+# autotable
+@txorm_compile.when(AutoTables)
+def compile_auto_tables(compile, expression, state):
+    """Compile auto tables
+    """
+
+    if expression.replace is True:
+        state.push('auto_tables', [])
+
+    statement = compile(expression.expression, state)
+    if expression.replace is True:
+        state.pop()
+
+    state.auto_tables.extend(expression.tables)
+    return statement
+
+
 # joins
 @txorm_compile.when(JoinExpression)
 def compile_join(compile, join, state):
@@ -516,6 +690,28 @@ def compile_sql_token(compile, expression, state):
         return expression
 
     return '"{}"'.format(expression.replace('"', '""'))
+
+
+@txorm_compile.when(SQL)
+def compile_sql(compile, expression, state):
+    """Compile SQL expression
+    """
+
+    if expression.params is not Undef:
+        if not isinstance(expression.params, (tuple, list)):
+            raise CompileError(
+                'Parameters should be a list or a tuple not {!r}'.format(
+                    type(expression.params)
+                )
+            )
+
+        for param in expression.params:
+            state.parameters.append(param)
+
+    if expression.tables is not Undef:
+        state.auto_tables.append(expression.tables)
+
+    return expression.expression
 
 
 # statement expressions
@@ -560,7 +756,7 @@ def _compile_coumpound(compile, tables, state):
     if tables is state.auto_tables:
         statements = defaultdict(lambda: set())
         # push a join_tables onto the state: compile calls below will populate
-        # this set so we can know whattables not to include
+        # this set so we can know what tables not to include
         state.push('join_tables', set())
 
         for elem in tables:
@@ -578,9 +774,10 @@ def _compile_coumpound(compile, tables, state):
         result = ', '.join(
             sorted(statements['table']) + sorted(statements['join'])
         )
-        if statements['half']:
+
+        if statements['half_join']:
             result = '{} {}'.format(
-                result, ' '.join(sorted(statements['half']))
+                result, ' '.join(sorted(statements['half_join']))
             )
     else:
         result = []

@@ -95,8 +95,12 @@ class Comparable(object):
         return Div(self, other)
 
     @extract_variable
+    def __truediv__(self, other):
+        # Python3 compatibility
+        return Div(self, other)
+
+    @extract_variable
     def __mod__(self, other):
-        from .operators import Mod
         return Mod(self, other)
 
     def __neg__(self):
@@ -361,13 +365,13 @@ class Count(FuncExpression):
     """Expression representing 'COUNT' named func
     """
 
-    __slots__ = ('column', 'distinct')
+    __slots__ = ('field', 'distinct')
     name = 'COUNT'
 
-    def __init__(self, column=Undef, distinct=False):
-        if distinct and column is Undef:
-            raise ValueError('Must specify column when using distinct count')
-        self.column = column
+    def __init__(self, field=Undef, distinct=False):
+        if distinct and field is Undef:
+            raise ValueError('Must specify field when using distinct count')
+        self.field = field
         self.distinct = distinct
 
 
@@ -431,9 +435,9 @@ class Cast(FuncExpression):
     """Expression representing 'CAST' named func
     """
 
-    __slots__ = ('column', 'type')
+    __slots__ = ('field', 'type')
     name = 'CAST'
 
-    def __init__(self, column, type):
-        self.column = column
+    def __init__(self, field, type):
+        self.field = field
         self.type = type
