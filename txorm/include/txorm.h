@@ -50,6 +50,8 @@ typedef struct {
     PyObject *_value;
     PyObject *_allow_none;
     PyObject *_validator;
+    PyObject *_validator_factory;
+    PyObject *_validator_attribute;
     PyObject *field;
 } VariableObject;
 
