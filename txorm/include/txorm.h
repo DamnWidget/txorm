@@ -69,6 +69,16 @@ typedef struct {
     PyObject *_parents;
 } CompileObject;
 
+/* ObjectData */
+typedef struct {
+    PyDictObject super;
+    PyObject *__weakreflist;
+    PyObject *__obj_ref;
+    PyObject *cls_data;
+    PyObject *variables;
+    PyObject *primary_vars;
+} ObjectDataObject;
+
 /* Initialization */
 static int
 initialize_globals(void)
