@@ -273,16 +273,14 @@ class CompilePython(Compile):
         state = State()
         source = self(expr, state)
         namespace = {}
+        lparams = len(state.parameters)
         code = (
             'def closure(parameters, bool):\n'
             '   [{}] = parameters\n'
             '   def match(get_field):\n'
             '       return bool({})\n'
             '   return match'.format(
-                ','.join('_{}'.format(
-                    i for i in range(len(state.parameters)))),
-                source
-            )
+                ','.join('_{}'.format(i) for i in range(lparams)), source)
         )
 
         exec(code, namespace)
