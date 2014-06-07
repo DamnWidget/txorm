@@ -1,4 +1,4 @@
-# -*- test-case-name: txorm.test.test_object_fields_data -*-
+# -*- test-case-name: txorm.test.test_object_data -*-
 # Copyright (c) 2014 Oscar Campos <oscar.campos@member.fsf.org>
 # See LICENSE for details
 
@@ -8,21 +8,21 @@ from weakref import ref
 
 from txorm import Undef, c_extensions_available
 from txorm.compat import binary_type, text_type, _PY3, b
-from txorm.exceptions import FieldInfoError, ClassDataError
+from txorm.exceptions import ObjectDataError, ClassDataError
 from txorm.compiler import Field, Desc, Table, TABLE, txorm_compile
 
 
-def get_obj_fields_data(obj):
+def get_obj_data(obj):
     """Extract fields data information from te given object
     """
 
-    if hasattr(obj, '__fields_data__'):
-        return obj.__fields_data__
+    if hasattr(obj, '__object_data__'):
+        return obj.__object_data__
 
-    # instantiate FieldsData first so that it breaks gracefully in case
+    # instantiate ObjectData first so that it breaks gracefully in case
     # that the object is not a TxORM object
-    obj_fields_data = FieldsData(obj)
-    return obj.__dict__.setdefault('__fields_data__', obj_fields_data)
+    obj_data = ObjectData(obj)
+    return obj.__dict__.setdefault('__object_data__', obj_data)
 
 
 def get_cls_data(cls):
@@ -37,7 +37,13 @@ def get_cls_data(cls):
         return cls.__class_data__
 
 
-class FieldsData(dict):
+def set_obj_data(obj, data):
+    """Set the given data as __object_data__ of the given obj
+    """
+    obj.__dict__['__object_data__'] = data
+
+
+class ObjectData(dict):
     """Store useful information about objects that define TxORM Properties
 
     :param obj: the object to store data from
@@ -45,8 +51,8 @@ class FieldsData(dict):
 
     __hash__ = object.__hash__
 
-    # for get_obj_fields_data, a FiedsData is its own obj_fields_data
-    __fields_data__ = property(lambda self: self)
+    # for get_obj_data, a FiedsData is its own obj_data
+    __object_data__ = property(lambda self: self)
 
     def __init__(self, obj):
         # first thing, try to create a ClassInfo for the object's class.
@@ -57,17 +63,25 @@ class FieldsData(dict):
         self.variables = variables = {}
 
         for field in self.cls_data.fields:
-            variables[field] = field.variable_factory(field=field)
+            variables[field] = field.variable_factory(
+                field=field, validator_factory=self.get_object
+            )
 
         self.primary_vars = tuple(
             variables[field] for field in self.cls_data.primary_key
         )
 
+    def __eq__(self, other):
+        return self is other
+
+    def __ne__(self, other):
+        return self is not other
+
     def get_object(self):
         return self._ref()
 
     def set_object(self, obj):
-        pass
+        self._ref = ref(obj)
 
 
 class ClassData(dict):
@@ -83,7 +97,9 @@ class ClassData(dict):
         self.__pairs = None
         self.__primary_key = None
 
-        self.table = getattr(cls, '__database_table__', None)
+        # look for __database_table__, fi not found check storm compatibility
+        self.table = getattr(
+            cls, '__database_table__', getattr(cls, '__storm_table__', None))
         if self.table is None:
             raise ClassDataError(
                 '{}.__database_table__ missing'.format(repr(cls))
@@ -128,6 +144,12 @@ class ClassData(dict):
                 prop = Desc(getattr(cls, item)) if desc is True else item
                 self.default_order.append(prop)
 
+    def __eq__(self, other):
+        return self is other
+
+    def __ne__(self, other):
+        return self is not other
+
     @property
     def pairs(self):
         """Calculate class pairs (if needed) and return it back
@@ -154,12 +176,16 @@ class ClassData(dict):
         if self.__primary_key is not None:
             return self.__primary_key
 
-        table_primary = getattr(self.cls, '__table_primary__', None)
+        # get the __table_primary__, if not found try storm compatibility
+        table_primary = getattr(
+            self.cls, '__table_primary__',
+            getattr(self.cls, '__storm_primary__', None)
+        )
         if table_primary is not None:
             if type(table_primary) is not tuple:
                 table_primary = (table_primary, )
 
-            self.primary_key = tuple(
+            self.__primary_key = tuple(
                 self.attributes[attr] for attr in table_primary
             )
         else:
@@ -181,9 +207,10 @@ class ClassData(dict):
 
             primary.sort()
             self.__primary_key = tuple(field for i, field in primary)
-            if len(self.__primary_key) == 0:
-                raise ClassDataError(
-                    '{} has no primary key information'.format(repr(self.cls))
-                )
+
+        if len(self.__primary_key) == 0:
+            raise ClassDataError(
+                '{} has no primary key information'.format(repr(self.cls))
+            )
 
         return self.primary_key
