@@ -18,7 +18,6 @@ from txorm.compiler.suffixes import Asc, Desc
 from txorm.compiler.fields import Field, Alias
 from txorm.compiler.prefixes import Not, Exists, Neg
 from txorm.compiler import CompileError, NoTableError
-from txorm.compiler.base import txorm_compile, Compile
 from txorm.compiler.tables import JoinExpression, Table
 from txorm.compiler.plain_sql import SQLRaw, SQLToken, SQL
 from txorm.compat import _PY3, b, u, binary_type, text_type
@@ -29,6 +28,7 @@ from txorm.compiler.comparable import Add, Sub, Mul, Div, Mod, Row
 from txorm.compiler.expressions import Select, Insert, Update, Delete
 from txorm.compiler.comparable import Ne, Gt, Ge, Lt, Le, LShift, RShift
 from txorm.compiler.expressions import Union, Except, Intersect, Sequence
+from txorm.compiler.base import txorm_compile, txorm_compile_python, Compile
 from txorm.compiler.comparable import And, Or, Func, NamedFunc, Like, Eq, In
 from txorm.compiler.expressions import ExpressionError, Expression, AutoTables
 from txorm.compiler import (
@@ -2181,6 +2181,266 @@ class CompileTest(unittest.TestCase):
             '''.split()
         for word in reserved_words:
             self.assertEqual(txorm_compile.is_reserved_word(word), True)
+
+
+class CompilePythonTest(unittest.TestCase):
+
+    def test_precedence(self):
+        expression = And(
+            e1, Or(e2, e3), Add(e4, Mul(e5, Sub(e6, Div(e7, Div(e8, e9))))))
+        py_expression = txorm_compile_python(expression)
+        self.assertEqual(py_expression, '1 and (2 or 3) and 4+5*(6-7/(8/9))')
+
+    def test_get_precedence(self):
+        pc = txorm_compile_python
+        self.assertTrue(pc.get_precedence(Or) < pc.get_precedence(And))
+        self.assertTrue(pc.get_precedence(Add) < pc.get_precedence(Mul))
+        self.assertTrue(pc.get_precedence(Sub) < pc.get_precedence(Div))
+
+    def test_compile_python_sequence(self):
+        expression = [elem1, Variable(1), (Variable(2), None)]
+        state = State()
+        py_expression = txorm_compile_python(expression, state)
+        self.assertEqual(py_expression, 'elem1, _0, _1, None')
+        self.assertEqual(state.parameters, [1, 2])
+
+    def test_compile_python_invalid(self):
+        self.assertRaises(CompileError, txorm_compile_python, object())
+        self.assertRaises(CompileError, txorm_compile_python, [object()])
+
+    def test_compile_python_unsupported(self):
+        self.assertRaises(CompileError, txorm_compile_python, Expression())
+        self.assertRaises(CompileError, txorm_compile_python, Func1())
+
+    def test_compile_python_binary_type(self):
+        py_expression = txorm_compile_python(b('binary'))
+        if _PY3:
+            self.assertEqual(py_expression, "b'binary'")
+        else:
+            self.assertEqual(py_expression, "'binary'")
+
+    def test_compile_python_text_type(self):
+        py_expression = txorm_compile_python(u('text'))
+        if _PY3:
+            self.assertEqual(py_expression, "'text'")
+        else:
+            self.assertEqual(py_expression, "u'text'")
+
+    def test_compile_python_int_long(self):
+        py_expression = txorm_compile_python(1)
+        self.assertEqual(py_expression, '1')
+
+    def test_compile_python_long(self):
+        """We can't try to tst 1L cos Python3 will fail with SyntaxError"""
+        if _PY3:
+            value = 1
+        else:
+            value = long(1)
+
+        py_expression = txorm_compile_python(value)
+        self.assertEqual(py_expression, '1' if _PY3 else '1L')
+
+    def test_compile_python_bool(self):
+        state = State()
+        py_expression = txorm_compile_python(True, state)
+        self.assertEqual(py_expression, '_0')
+        self.assertEqual(state.parameters, [True])
+
+    def test_compile_float(self):
+        py_expression = txorm_compile_python(1.1)
+        self.assertEqual(py_expression, repr(1.1))
+
+    def test_compile_datetime(self):
+        dt = datetime(1977, 5, 4, 12, 34)
+        state = State()
+        py_expression = txorm_compile_python(dt, state)
+        self.assertEquals(py_expression, '_0')
+        self.assertEquals(state.parameters, [dt])
+
+    def test_compile_date(self):
+        d = date(1977, 5, 4)
+        state = State()
+        py_expression = txorm_compile_python(d, state)
+        self.assertEquals(py_expression, '_0')
+        self.assertEquals(state.parameters, [d])
+
+    def test_compile_time(self):
+        t = time(12, 34)
+        state = State()
+        py_expression = txorm_compile_python(t, state)
+        self.assertEquals(py_expression, '_0')
+        self.assertEquals(state.parameters, [t])
+
+    def test_compile_timedelta(self):
+        td = timedelta(days=1, seconds=2, microseconds=3)
+        state = State()
+        py_expression = txorm_compile_python(td, state)
+        self.assertEquals(py_expression, '_0')
+        self.assertEquals(state.parameters, [td])
+
+    def test_compile_none(self):
+        py_expression = txorm_compile_python(None)
+        self.assertEquals(py_expression, 'None')
+
+    def test_compile_column(self):
+        expr = Field(field1)
+        state = State()
+        py_expression = txorm_compile_python(expr, state)
+        self.assertEquals(py_expression, 'get_field(_0)')
+        self.assertEquals(state.parameters, [expr])
+
+    def test_compile_column_table(self):
+        expr = Field(field1, table1)
+        state = State()
+        py_expression = txorm_compile_python(expr, state)
+        self.assertEquals(py_expression, 'get_field(_0)')
+        self.assertEquals(state.parameters, [expr])
+
+    def test_compile_variable(self):
+        expr = Variable('value')
+        state = State()
+        py_expression = txorm_compile_python(expr, state)
+        self.assertEquals(py_expression, '_0')
+        self.assertEquals(state.parameters, ['value'])
+
+    def test_compile_eq(self):
+        expr = Eq(Variable(1), Variable(2))
+        state = State()
+        py_expression = txorm_compile_python(expr, state)
+        self.assertEquals(py_expression, '_0 == _1')
+        self.assertEquals(state.parameters, [1, 2])
+
+    def test_compile_ne(self):
+        expr = Ne(Variable(1), Variable(2))
+        state = State()
+        py_expression = txorm_compile_python(expr, state)
+        self.assertEquals(py_expression, '_0 != _1')
+        self.assertEquals(state.parameters, [1, 2])
+
+    def test_compile_gt(self):
+        expr = Gt(Variable(1), Variable(2))
+        state = State()
+        py_expression = txorm_compile_python(expr, state)
+        self.assertEquals(py_expression, '_0 > _1')
+        self.assertEquals(state.parameters, [1, 2])
+
+    def test_compile_ge(self):
+        expr = Ge(Variable(1), Variable(2))
+        state = State()
+        py_expression = txorm_compile_python(expr, state)
+        self.assertEquals(py_expression, '_0 >= _1')
+        self.assertEquals(state.parameters, [1, 2])
+
+    def test_compile_lt(self):
+        expr = Lt(Variable(1), Variable(2))
+        state = State()
+        py_expression = txorm_compile_python(expr, state)
+        self.assertEquals(py_expression, '_0 < _1')
+        self.assertEquals(state.parameters, [1, 2])
+
+    def test_compile_le(self):
+        expr = Le(Variable(1), Variable(2))
+        state = State()
+        py_expression = txorm_compile_python(expr, state)
+        self.assertEquals(py_expression, '_0 <= _1')
+        self.assertEquals(state.parameters, [1, 2])
+
+    def test_compile_lshift(self):
+        expr = LShift(Variable(1), Variable(2))
+        state = State()
+        py_expression = txorm_compile_python(expr, state)
+        self.assertEquals(py_expression, '_0<<_1')
+        self.assertEquals(state.parameters, [1, 2])
+
+    def test_compile_rshift(self):
+        expr = RShift(Variable(1), Variable(2))
+        state = State()
+        py_expression = txorm_compile_python(expr, state)
+        self.assertEquals(py_expression, '_0>>_1')
+        self.assertEquals(state.parameters, [1, 2])
+
+    def test_compile_in(self):
+        expr = In(Variable(1), Variable(2))
+        state = State()
+        py_expression = txorm_compile_python(expr, state)
+        self.assertEquals(py_expression, '_0 in (_1,)')
+        self.assertEquals(state.parameters, [1, 2])
+
+    def test_compile_and(self):
+        expr = And(elem1, elem2, And(elem3, elem4))
+        py_expression = txorm_compile_python(expr)
+        self.assertEquals(py_expression, 'elem1 and elem2 and elem3 and elem4')
+
+    def test_compile_or(self):
+        expr = Or(elem1, elem2, Or(elem3, elem4))
+        py_expression = txorm_compile_python(expr)
+        self.assertEquals(py_expression, 'elem1 or elem2 or elem3 or elem4')
+
+    def test_compile_add(self):
+        expr = Add(elem1, elem2, Add(elem3, elem4))
+        py_expression = txorm_compile_python(expr)
+        self.assertEquals(py_expression, 'elem1+elem2+elem3+elem4')
+
+    def test_compile_neg(self):
+        expr = Neg(elem1)
+        py_expression = txorm_compile_python(expr)
+        self.assertEquals(py_expression, '-elem1')
+
+    def test_compile_sub(self):
+        expr = Sub(elem1, Sub(elem2, elem3))
+        py_expression = txorm_compile_python(expr)
+        self.assertEquals(py_expression, 'elem1-(elem2-elem3)')
+
+        expr = Sub(Sub(elem1, elem2), elem3)
+        py_expression = txorm_compile_python(expr)
+        self.assertEquals(py_expression, 'elem1-elem2-elem3')
+
+    def test_compile_mul(self):
+        expr = Mul(elem1, elem2, Mul(elem3, elem4))
+        py_expression = txorm_compile_python(expr)
+        self.assertEquals(py_expression, 'elem1*elem2*elem3*elem4')
+
+    def test_compile_div(self):
+        expr = Div(elem1, Div(elem2, elem3))
+        py_expression = txorm_compile_python(expr)
+        self.assertEquals(py_expression, 'elem1/(elem2/elem3)')
+
+        expr = Div(Div(elem1, elem2), elem3)
+        py_expression = txorm_compile_python(expr)
+        self.assertEquals(py_expression, 'elem1/elem2/elem3')
+
+    def test_compile_mod(self):
+        expr = Mod(elem1, Mod(elem2, elem3))
+        py_expression = txorm_compile_python(expr)
+        self.assertEquals(py_expression, 'elem1%(elem2%elem3)')
+
+        expr = Mod(Mod(elem1, elem2), elem3)
+        py_expression = txorm_compile_python(expr)
+        self.assertEquals(py_expression, 'elem1%elem2%elem3')
+
+    def test_compile_match(self):
+        fie1 = Field(field1)
+        fie2 = Field(field2)
+
+        match = txorm_compile_python.get_matcher((fie1 > 10) & (fie2 < 10))
+
+        self.assertTrue(match({fie1: 15, fie2: 5}.get))
+        self.assertFalse(match({fie1: 5, fie2: 15}.get))
+
+    def test_compile_match_bad_repr(self):
+        """
+        The get_matcher() works for expressions containing values
+        whose repr is not valid Python syntax.
+        """
+
+        class BadRepr(object):
+            def __repr__(self):
+                return '$Not a valid Python expression$'
+
+        value = BadRepr()
+        fie1 = Field(field1)
+        match = txorm_compile_python.get_matcher(fie1 == Variable(value))
+        self.assertTrue(match({fie1: value}.get))
 
 
 def assert_variables(test, checked, expected):
