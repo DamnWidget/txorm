@@ -16,10 +16,20 @@ class CompileError(TxormError):
 
 
 class NoTableError(CompileError):
-    """Raised when notable is avaibale on compile time
+    """Raised when no table is avaibale on compile time
     """
 
 
 class NoneError(TxormError):
     """Raised when None is not allowed for a variable value
+    """
+
+
+class FieldInfoError(TxormError):
+    """Raised when errors on fields data are detected
+    """
+
+
+class ClassDataError(TxormError):
+    """Raised when errors on class info are detected
     """
