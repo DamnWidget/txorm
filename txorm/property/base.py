@@ -11,7 +11,7 @@ from txorm import Undef
 from txorm.compiler import Field
 from txorm.variable import Variable
 from txorm.compat import _PY3, iteritems
-from txorm.object_fields_data import get_obj_fields_data
+from txorm.object_data import get_obj_data
 
 
 class Property(object):
@@ -44,7 +44,7 @@ class Property(object):
         if obj is None:
             return self._get_field(cls)
 
-        obj_fields_data = get_obj_fields_data(obj)
+        obj_fields_data = get_obj_data(obj)
         if cls is None:
             # don't get obj.__class__ because we don't trust if
             cls = obj_fields_data.cls_data.cls
@@ -56,7 +56,7 @@ class Property(object):
         """Set the given value right variable type for this property field data
         """
 
-        obj_fields_data = get_obj_fields_data(obj)
+        obj_fields_data = get_obj_data(obj)
         # don't get obj.__class__ because we don't trust if
         field = self._get_field(obj_fields_data.cls_data.cls)
         obj_fields_data.variables[field].set(value)
@@ -65,7 +65,7 @@ class Property(object):
         """Delete the wrapped variable value
         """
 
-        obj_fields_data = get_obj_fields_data(obj)
+        obj_fields_data = get_obj_data(obj)
         # don't get obj.__class__ because we don't trust if
         field = self._get_field(obj_fields_data.cls_data.cls)
         obj_fields_data.variables[field].delete()
@@ -125,7 +125,8 @@ class PropertyField(Field):
         self.array = variable_kwargs.pop('array', None)
 
         Field.__init__(self, name, cls, primary, partial(
-            variable_class, field=self, **variable_kwargs
+            variable_class, field=self,
+            validator_attribute=attr, **variable_kwargs
         ))
 
         self.cls = cls   # used by references
