@@ -692,6 +692,14 @@ def compile_sql_token(compile, expression, state):
     return '"{}"'.format(expression.replace('"', '""'))
 
 
+@txorm_compile_python.when(SQLToken)
+def compie_sql_token(compile, expression, state):
+    if is_safe_token(expression) and not compile.is_reserved_word(expression):
+        return expression
+
+    return '"{}"'.format(expression.replace('"', '""'))
+
+
 @txorm_compile.when(SQL)
 def compile_sql(compile, expression, state):
     """Compile SQL expression
