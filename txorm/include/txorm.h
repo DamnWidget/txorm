@@ -43,6 +43,7 @@ static PyObject *State = NULL;
 static PyObject *CompileError = NULL;
 static PyObject *parenthesis_format = NULL;
 static PyObject *default_compile_join = NULL;
+static PyObject *get_cls_data = NULL;
 
 /* Varaible */
 typedef struct {
@@ -115,6 +116,17 @@ initialize_globals(void)
 
     raise_none_error = PyObject_GetAttrString(module, "raise_none_error");
     if (!raise_none_error)
+        return 0;
+
+    Py_DECREF(module);
+
+    /* import objects from txorm.object_data module */
+    module = PyImport_ImportModule("txorm.object_data");
+    if (!module)
+        return 0;
+
+    get_cls_data = PyObject_GetAttrString(module, "get_cls_data");
+    if (!get_cls_data)
         return 0;
 
     Py_DECREF(module);

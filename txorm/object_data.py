@@ -43,47 +43,6 @@ def set_obj_data(obj, data):
     obj.__dict__['__object_data__'] = data
 
 
-class ObjectData(dict):
-    """Store useful information about objects that define TxORM Properties
-
-    :param obj: the object to store data from
-    """
-
-    __hash__ = object.__hash__
-
-    # for get_obj_data, a FiedsData is its own obj_data
-    __object_data__ = property(lambda self: self)
-
-    def __init__(self, obj):
-        # first thing, try to create a ClassInfo for the object's class.
-        # this ensures that obj is the kind of object we expect.
-        self.cls_data = get_cls_data(type(obj))
-
-        self.set_object(obj)
-        self.variables = variables = {}
-
-        for field in self.cls_data.fields:
-            variables[field] = field.variable_factory(
-                field=field, validator_factory=self.get_object
-            )
-
-        self.primary_vars = tuple(
-            variables[field] for field in self.cls_data.primary_key
-        )
-
-    def __eq__(self, other):
-        return self is other
-
-    def __ne__(self, other):
-        return self is not other
-
-    def get_object(self):
-        return self._ref()
-
-    def set_object(self, obj):
-        self._ref = ref(obj)
-
-
 class ClassData(dict):
     """Store useful information of a class
 
@@ -214,3 +173,49 @@ class ClassData(dict):
             )
 
         return self.primary_key
+
+
+class ObjectData(dict):
+    """Store useful information about objects that define TxORM Properties
+
+    :param obj: the object to store data from
+    """
+
+    __hash__ = object.__hash__
+
+    # for get_obj_data, a FiedsData is its own obj_data
+    __object_data__ = property(lambda self: self)
+
+    def __init__(self, obj):
+        # first thing, try to create a ClassInfo for the object's class.
+        # this ensures that obj is the kind of object we expect.
+        self.cls_data = get_cls_data(type(obj))
+
+        self.set_object(obj)
+        self.variables = variables = {}
+
+        for field in self.cls_data.fields:
+            variables[field] = field.variable_factory(
+                field=field, validator_factory=self.get_object
+            )
+
+        self.primary_vars = tuple(
+            variables[field] for field in self.cls_data.primary_key
+        )
+
+    def __eq__(self, other):
+        return self is other
+
+    def __ne__(self, other):
+        return self is not other
+
+    def get_object(self):
+        return self._ref()
+
+    def set_object(self, obj):
+        self._ref = ref(obj, None)
+
+
+if c_extensions_available is True:
+    from txorm._object_data import ObjectData, get_obj_data
+

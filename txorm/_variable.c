@@ -62,7 +62,7 @@ Variable_init(VariableObject *self, PyObject *args, PyObject *kwargs)
 
     if (!PyArg_ParseTupleAndKeywords(
             args, kwargs, "|OOOOOOOO", kwlist, &value, &value_factory, &from_db,
-            &allow_none, &field, &validator, &validator_factory, &value_factory))
+            &allow_none, &field, &validator, &validator_factory, &validator_attribute))
         return -1;
 
     /* if allow_none is not True: */
