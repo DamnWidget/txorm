@@ -5,6 +5,7 @@
 """TxORM Variable
 """
 
+from .base import Variable
 from .int import IntVariable
 from .bool import BoolVariable
 from ._date import DateVariable
@@ -19,17 +20,6 @@ from ._datetime import DateTimeVariable
 from ._fraction import FractionVariable
 from .timedelta import TimeDeltaVariable
 from .mysql_enum import MysqlEnumVariable
-
-from txorm.compat import _PYPY
-from txorm import c_extensions_available
-
-if not _PYPY and c_extensions_available:
-    try:
-        from txorm._variable import Variable
-    except ImportError:
-        from .base import Variable
-else:
-    from .base import Variable
 
 
 __all__ = [

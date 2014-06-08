@@ -7,18 +7,9 @@ from __future__ import unicode_literals
 import re
 from datetime import timedelta
 
-from txorm import c_extensions_available
-from txorm.compat import _PYPY, binary_type, text_type
-
-if not _PYPY and c_extensions_available:
-    try:
-        from txorm._variable import Variable
-    except ImportError:
-        from .base import Variable
-else:
-    from .base import Variable
-
+from .base import Variable
 from ._datetime import _parse_time
+from txorm.compat import binary_type, text_type
 
 
 class TimeDeltaVariable(Variable):

@@ -7,17 +7,9 @@ from __future__ import unicode_literals
 from decimal import Decimal
 from fractions import Fraction
 
-from txorm.compat import _PYPY, _PY3
-from txorm import c_extensions_available
+from .base import Variable
+from txorm.compat import _PY3
 from txorm.compat import binary_type, text_type, u
-
-if not _PYPY and c_extensions_available:
-    try:
-        from txorm._variable import Variable
-    except ImportError:
-        from .base import Variable
-else:
-    from .base import Variable
 
 
 class FractionVariable(Variable):

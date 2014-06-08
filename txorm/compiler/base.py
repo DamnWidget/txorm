@@ -6,7 +6,6 @@ from __future__ import unicode_literals
 
 from weakref import WeakKeyDictionary
 
-from txorm import c_extensions_available
 from txorm.exceptions import CompileError
 from txorm.compat import binary_type, text_type
 
@@ -256,11 +255,6 @@ class Compile(object):
 
         for child in self._children:
             child._update_cache()
-
-
-if c_extensions_available is True:
-    assert Compile
-    from txorm._compiler import Compile
 
 
 class CompilePython(Compile):

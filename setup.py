@@ -18,7 +18,7 @@ if 'darwin' in sys.platform:
     cflags.append('-Qunused-arguments')
     os.environ['CFLAGS'] = ' '.join(cflags)
 
-from setuptools import setup, Extension, find_packages
+from setuptools import setup, find_packages
 
 
 def get_txorm_version():
@@ -26,11 +26,6 @@ def get_txorm_version():
         txorm_ver = txorm_ver_file.read()
 
     return txorm_ver.strip()
-
-_variable = Extension('txorm._variable', sources=['txorm/_variable.c'])
-_compiler = Extension('txorm._compiler', sources=['txorm/_compiler.c'])
-_object_data = Extension(
-    'txorm._object_data', sources=['txorm/_object_data.c'])
 
 setup(
     name='txorm',
@@ -41,7 +36,6 @@ setup(
     maintainer='TxORM Developers',
     license='LGPL',
     packages=find_packages(),
-    ext_modules=[_variable, _compiler, _object_data],
     tests_require=['twisted>=10.2.0'],
     install_requires=['twisted>=10.2.0'],
     requires=['twisted(>=10.2.0)', 'zope.component'],

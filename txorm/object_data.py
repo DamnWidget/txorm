@@ -6,7 +6,7 @@ from __future__ import unicode_literals
 
 from weakref import ref
 
-from txorm import Undef, c_extensions_available
+from txorm import Undef
 from txorm.compat import binary_type, text_type, _PY3, b
 from txorm.exceptions import ObjectDataError, ClassDataError
 from txorm.compiler import Field, Desc, Table, TABLE, txorm_compile
@@ -214,8 +214,3 @@ class ObjectData(dict):
 
     def set_object(self, obj):
         self._ref = ref(obj, None)
-
-
-if c_extensions_available is True:
-    from txorm._object_data import ObjectData, get_obj_data
-

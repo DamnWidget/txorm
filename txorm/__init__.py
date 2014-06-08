@@ -11,7 +11,6 @@ For more details take a loof at the documentation at http://txorm.pymamba.com
 
 from __future__ import unicode_literals
 
-import os
 import sys
 
 if not hasattr(sys, "version_info") or sys.version_info < (2, 6):
@@ -40,13 +39,3 @@ class UndefBaseType(object):
 
 # Instance of Undef
 Undef = UndefBaseType()
-
-c_extensions_available = False
-if os.environ.get('TXORM_C_MODULE') != "0":
-    try:
-        from txorm import _variable
-        assert _variable
-        c_extensions_available = True
-    except ImportError as error:
-        if '_variable' not in str(error):
-            raise
