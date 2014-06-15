@@ -5,12 +5,17 @@
 """TxORM Field Data Unit Tests
 """
 
+import gc
+from weakref import ref
+
 from twisted.trial import unittest
 
 from txorm.variable import Variable
 from txorm.property import Property
+from txorm.compiler import txorm_compile
 from txorm.exceptions import ClassDataError
-from txorm.object_data import ClassData, ObjectData
+from txorm.compiler.expressions import Select
+from txorm.object_data import ClassData, ObjectData, ClassAlias
 from txorm.object_data import get_obj_data, get_cls_data, set_obj_data
 
 
@@ -127,7 +132,7 @@ class ClassDataTest(unittest.TestCase):
         )
 
     def test_table(self):
-        self.assertEqual(self.cls_data.table.name, 'dummy')
+        self.assertEqual(self.cls_data.table.name, 'table')
 
     def test_primary_key(self):
         self.assertTrue(self.cls_data.primary_key[0] is self.Dummy.prop1)
@@ -236,10 +241,131 @@ class GetTest(unittest.TestCase):
         self.assertEqual(get_obj_data(self.obj), obj_data2)
 
 
+class ClassAliasTest(unittest.TestCase):
+
+    def setUp(self):
+        self.Dummy = Dummy
+        self.ClassAlias = ClassAlias(self.Dummy, 'alias_dummy')
+
+    def test_cls_data_cls(self):
+        cls_data = get_cls_data(self.ClassAlias)
+        self.assertEqual(cls_data.cls, self.Dummy)
+        self.assertEqual(cls_data.table.name, 'alias_dummy')
+        self.assertEqual(self.ClassAlias.prop1.name, 'field1')
+        self.assertEqual(self.ClassAlias.prop2.name, 'field2')
+        self.assertEqual(self.ClassAlias.prop1.table, self.ClassAlias)
+        self.assertEqual(self.ClassAlias.prop2.table, self.ClassAlias)
+
+    def test_compile(self):
+        statement = txorm_compile(self.ClassAlias)
+        self.assertEqual(statement, 'alias_dummy')
+
+    def test_compile_with_reserved_keyword(self):
+        Alias = ClassAlias(self.Dummy, 'select')
+        statement = txorm_compile(Alias)
+        self.assertEqual(statement, '"select"')
+
+    def test_compile_in_select(self):
+        expression = Select(
+            self.ClassAlias.prop1, self.ClassAlias.prop1 == 1, self.ClassAlias
+        )
+        statement = txorm_compile(expression)
+        self.assertEqual(
+            statement,
+            'SELECT alias_dummy.field1 FROM "table" AS alias_dummy '
+            'WHERE alias_dummy.field1 = ?'
+        )
+
+    def test_compile_in_select_with_reserved_word(self):
+        Alias = ClassAlias(self.Dummy, 'select')
+        expression = Select(Alias.prop1, Alias.prop1 == 1, Alias)
+        statement = txorm_compile(expression)
+        self.assertEqual(
+            statement,
+            'SELECT "select".field1 FROM "table" AS "select" '
+            'WHERE "select".field1 = ?'
+        )
+
+    def test_metaclass_messing_around(self):
+
+        class MetaClass(type):
+            def __new__(meta_cls, name, bases, dict):
+                cls = type.__new__(meta_cls, name, bases, dict)
+                cls.__database_table__ = 'WHAT THE...'
+                return cls
+
+        class Class(object):
+            __metaclass__ = MetaClass
+            __database_table__ = 'table'
+            prop1 = Property('field1', primary=True)
+
+        Alias = ClassAlias(Class, 'USE_THIS')
+        self.assertEqual(Alias.__database_table__, 'USE_THIS')
+
+    def test_cached_aliases(self):
+        alias1 = ClassAlias(self.Dummy, 'something_unlikely')
+        alias2 = ClassAlias(self.Dummy, 'something_unlikely')
+        self.assertIdentical(alias1, alias2)
+        alias3 = ClassAlias(self.Dummy, 'something_unlikely2')
+        self.assertNotIdentical(alias1, alias3)
+        alias4 = ClassAlias(self.Dummy, 'something_unlikely2')
+        self.assertIdentical(alias3, alias4)
+
+    def test_unnamed_aliases_not_cached(self):
+        alias1 = ClassAlias(self.Dummy)
+        alias2 = ClassAlias(self.Dummy)
+        self.assertNotIdentical(alias1, alias2)
+
+    def test_alias_cache_is_per_class(self):
+
+        class LocalClass(self.Dummy):
+            pass
+
+        alias1 = ClassAlias(self.Dummy, 'something_unikely')
+        alias2 = ClassAlias(LocalClass, 'something_unikely')
+        self.assertNotIdentical(alias1, alias2)
+
+    def test_aliases_only_last_as_long_as_class(self):
+
+        class LocalClass(self.Dummy):
+            pass
+
+        alias = ClassAlias(LocalClass, 'something_unikely3')
+        alias_ref = ref(alias)
+        class_ref = ref(LocalClass)
+        del alias
+        del LocalClass
+
+        for i in range(4):
+            gc.collect()
+
+        self.assertIsNone(class_ref())
+        self.assertIsNone(alias_ref())
+
+
+class TypeCompileTest(unittest.TestCase):
+
+    def test_nested_classes(self):
+
+        class Class1(object):
+            __database_table__ = 'class1'
+            id = Property(primary=True)
+
+        class Class2(object):
+            __database_table__ = Class1
+            id = Property(primary=True)
+
+        statement = txorm_compile(Class2)
+        self.assertEqual(statement, 'class1')
+        alias = ClassAlias(Class2, 'alias')
+        statement = txorm_compile(Select(alias.id))
+        self.assertEqual(statement, 'SELECT alias.id FROM class1 AS alias')
+
+
 class Dummy(object):
     """Dummy class for testing purposes
     """
 
-    __database_table__ = 'dummy'
+    __database_table__ = 'table'
     prop1 = Property('field1', primary=True)
     prop2 = Property('field2')

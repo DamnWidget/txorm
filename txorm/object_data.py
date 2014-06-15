@@ -7,6 +7,7 @@ from __future__ import unicode_literals
 from weakref import ref
 
 from txorm import Undef
+from txorm.compiler import txorm_compile
 from txorm.compat import binary_type, text_type, _PY3, b
 from txorm.exceptions import ObjectDataError, ClassDataError
 from txorm.compiler import Field, Desc, Table, TABLE, txorm_compile
@@ -214,3 +215,55 @@ class ObjectData(dict):
 
     def set_object(self, obj):
         self._ref = ref(obj, None)
+
+
+class ClassAlias(object):
+    """Create a named alias for a TxORM class to use in queries.
+
+    This is useful wehn the SQL 'AS' feature is desired in code using TxORM
+    queries. ClassAliases which are explicitly named are cached for as long
+    as the class exists, such that the alias returned from the constructor
+    should be the same object no matter how many times it's called.
+
+    :param cls: the class to create an alias from
+    :param name: if provided, specify the name of the alias to create
+    """
+
+    alias_count = 0
+
+    def __new__(self_cls, cls, name=Undef):
+        if name is Undef:
+            use_cache = False
+            ClassAlias.alias_count += 1
+            name = '_{:x}'.format(ClassAlias.alias_count)
+        else:
+            use_cache = True
+            cache = cls.__dict__.get('_alias_cache')
+            if cache is None:
+                cls._alias_cache = {}
+            elif name in cache:
+                return cache[name]
+
+        if _PY3 is False:
+            alias_name = b('{}Alias'.format(cls.__name__))
+        else:
+            alias_name = '{}Alias'.format(cls.__name__)
+        alias_cls = type(alias_name, (self_cls,), {'__database_table__': name})
+        alias_cls.__bases__ = (cls, self_cls)
+        alias_cls_data = get_cls_data(alias_cls)
+        alias_cls_data.cls = cls
+
+        if use_cache:
+            cls._alias_cache[name] = alias_cls
+
+        return alias_cls
+
+
+@txorm_compile.when(type)
+def compile_type(compile, expression, state):
+    cls_data = get_cls_data(expression)
+    table = compile(cls_data.table, state)
+    if state.context is TABLE and issubclass(expression, ClassAlias):
+        return '{} AS {}'.format(compile(cls_data.cls, state), table)
+
+    return table
