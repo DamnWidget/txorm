@@ -5,16 +5,19 @@
 """TxORM Property Unit Tests
 """
 
+from decimal import Decimal as decimal
+
 from twisted.trial import unittest
 
-from txorm.variable import Variable
 from txorm.exceptions import NoneError
 from txorm.compiler.state import State
 from txorm.object_data import get_obj_data
+from txorm.property import Int, Bool, Float
 from txorm.compiler.plain_sql import SQLRaw
 from txorm.compiler.expressions import Select
 from txorm.property.base import SimpleProperty
 from txorm.compiler import Field, txorm_compile
+from txorm.variable import Variable, BoolVariable, IntVariable, FloatVariable
 
 from .test_expressions import assert_variables
 
@@ -389,3 +392,91 @@ class PropertyTest(unittest.TestCase):
         self.assertTrue(
             self.Dummy.prop4._creation_order > self.Dummy.prop3._creation_order
         )
+
+
+class PropertyKindsTest(unittest.TestCase):
+
+    def setup(self, property, *args, **kwargs):
+        prop2_kwargs = kwargs.pop('prop2_kwargs', {})
+        kwargs['primary'] = True
+
+        class Class(object):
+            __database_table__ = 'mytable'
+            prop1 = property('field1', *args, **kwargs)
+            prop2 = property(**prop2_kwargs)
+
+        class SubClass(Class):
+            pass
+
+        self.Class = Class
+        self.SubClass = SubClass
+        self.obj = SubClass()
+        self.obj_data = get_obj_data(self.obj)
+        self.field1 = self.SubClass.prop1
+        self.field2 = self.SubClass.prop2
+        self.variable1 = self.obj_data.variables[self.field1]
+        self.variable2 = self.obj_data.variables[self.field2]
+
+    def test_bool(self):
+        self.setup(Bool, default=50, allow_none=False)
+
+        self.assertTrue(isinstance(self.field1, Field))
+        self.assertTrue(isinstance(self.field2, Field))
+        self.assertEqual(self.field1.name, 'field1')
+        self.assertEqual(self.field1.table, self.SubClass)
+        self.assertEqual(self.field2.name, 'prop2')
+        self.assertEqual(self.field2.table, self.SubClass)
+        self.assertTrue(isinstance(self.variable1, BoolVariable))
+        self.assertTrue(isinstance(self.variable2, BoolVariable))
+
+        self.assertEqual(self.obj.prop1, True)
+        self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
+        self.obj.prop2 = None
+        self.assertEqual(self.obj.prop2, None)
+
+        self.obj.prop1 = 1
+        self.assertTrue(self.obj.prop1 is True)
+        self.obj.prop1 = 0
+        self.assertTrue(self.obj.prop1 is False)
+
+    def test_int(self):
+        self.setup(Int, default=50, allow_none=False)
+
+        self.assertTrue(isinstance(self.field1, Field))
+        self.assertTrue(isinstance(self.field2, Field))
+        self.assertEqual(self.field1.name, 'field1')
+        self.assertEqual(self.field1.table, self.SubClass)
+        self.assertEqual(self.field2.name, 'prop2')
+        self.assertEqual(self.field2.table, self.SubClass)
+        self.assertTrue(isinstance(self.variable1, IntVariable))
+        self.assertTrue(isinstance(self.variable2, IntVariable))
+
+        self.assertEqual(self.obj.prop1, 50)
+        self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
+        self.obj.prop2 = None
+        self.assertEqual(self.obj.prop2, None)
+
+        self.obj.prop1 = False
+        self.assertTrue(self.obj.prop1 == 0)
+        self.obj.prop1 = True
+        self.assertTrue(self.obj.prop1 == 1)
+
+    def test_float(self):
+        self.setup(Float, default=50.5, allow_none=False)
+
+        self.assertTrue(isinstance(self.field1, Field))
+        self.assertTrue(isinstance(self.field2, Field))
+        self.assertEqual(self.field1.name, 'field1')
+        self.assertEqual(self.field1.table, self.SubClass)
+        self.assertEqual(self.field2.name, 'prop2')
+        self.assertEqual(self.field2.table, self.SubClass)
+        self.assertTrue(isinstance(self.variable1, FloatVariable))
+        self.assertTrue(isinstance(self.variable2, FloatVariable))
+
+        self.assertEqual(self.obj.prop1, 50.5)
+        self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
+        self.obj.prop2 = None
+        self.assertEqual(self.obj.prop2, None)
+
+        self.obj.prop1 = 1
+        self.assertTrue(isinstance(self.obj.prop1, float))

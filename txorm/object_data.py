@@ -7,7 +7,6 @@ from __future__ import unicode_literals
 from weakref import ref
 
 from txorm import Undef
-from txorm.compiler import txorm_compile
 from txorm.compat import binary_type, text_type, _PY3, b
 from txorm.exceptions import ObjectDataError, ClassDataError
 from txorm.compiler import Field, Desc, Table, TABLE, txorm_compile

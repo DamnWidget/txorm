@@ -4,13 +4,12 @@
 
 from __future__ import unicode_literals
 
-import sys
 from functools import partial
 
 from txorm import Undef
 from txorm.compiler import Field
+from txorm.compat import iteritems
 from txorm.variable import Variable
-from txorm.compat import _PY3, iteritems
 from txorm.object_data import get_obj_data
 
 
