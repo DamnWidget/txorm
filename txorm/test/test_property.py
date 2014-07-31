@@ -9,6 +9,7 @@ from decimal import Decimal as decimal
 
 from twisted.trial import unittest
 
+from txorm.compat import b, u
 from txorm.exceptions import NoneError
 from txorm.compiler.state import State
 from txorm.object_data import get_obj_data
@@ -16,9 +17,10 @@ from txorm.compiler.plain_sql import SQLRaw
 from txorm.compiler.expressions import Select
 from txorm.property.base import SimpleProperty
 from txorm.compiler import Field, txorm_compile
-from txorm.property import Int, Bool, Float, Decimal
+from txorm.property import Int, Bool, Float, Decimal, RawStr
 from txorm.variable import (
-    Variable, BoolVariable, IntVariable, FloatVariable, DecimalVariable
+    Variable, BoolVariable, IntVariable, FloatVariable, DecimalVariable,
+    RawStrVariable
 )
 
 from .test_expressions import assert_variables
@@ -502,3 +504,22 @@ class PropertyKindsTest(unittest.TestCase):
 
         self.obj.prop1 = 1
         self.assertTrue(isinstance(self.obj.prop1, decimal))
+
+    def test_str(self):
+        self.setup(RawStr, default=b('def'), allow_none=False)
+
+        self.assertTrue(isinstance(self.field1, Field))
+        self.assertTrue(isinstance(self.field2, Field))
+        self.assertEqual(self.field1.name, 'field1')
+        self.assertEqual(self.field1.table, self.SubClass)
+        self.assertEqual(self.field2.name, 'prop2')
+        self.assertEqual(self.field2.table, self.SubClass)
+        self.assertTrue(isinstance(self.variable1, RawStrVariable))
+        self.assertTrue(isinstance(self.variable2, RawStrVariable))
+
+        self.assertEqual(self.obj.prop1, b('def'))
+        self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
+        self.obj.prop2 = None
+        self.assertEqual(self.obj.prop2, None)
+
+        self.assertRaises(TypeError, setattr, self.obj, 'prop1', u('unicode'))
