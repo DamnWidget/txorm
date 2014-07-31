@@ -12,12 +12,14 @@ from twisted.trial import unittest
 from txorm.exceptions import NoneError
 from txorm.compiler.state import State
 from txorm.object_data import get_obj_data
-from txorm.property import Int, Bool, Float
 from txorm.compiler.plain_sql import SQLRaw
 from txorm.compiler.expressions import Select
 from txorm.property.base import SimpleProperty
 from txorm.compiler import Field, txorm_compile
-from txorm.variable import Variable, BoolVariable, IntVariable, FloatVariable
+from txorm.property import Int, Bool, Float, Decimal
+from txorm.variable import (
+    Variable, BoolVariable, IntVariable, FloatVariable, DecimalVariable
+)
 
 from .test_expressions import assert_variables
 
@@ -480,3 +482,23 @@ class PropertyKindsTest(unittest.TestCase):
 
         self.obj.prop1 = 1
         self.assertTrue(isinstance(self.obj.prop1, float))
+
+    def test_decimal(self):
+        self.setup(Decimal, default=decimal('50.5'), allow_none=False)
+
+        self.assertTrue(isinstance(self.field1, Field))
+        self.assertTrue(isinstance(self.field2, Field))
+        self.assertEqual(self.field1.name, 'field1')
+        self.assertEqual(self.field1.table, self.SubClass)
+        self.assertEqual(self.field2.name, 'prop2')
+        self.assertEqual(self.field2.table, self.SubClass)
+        self.assertTrue(isinstance(self.variable1, DecimalVariable))
+        self.assertTrue(isinstance(self.variable2, DecimalVariable))
+
+        self.assertEqual(self.obj.prop1, decimal('50.5'))
+        self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
+        self.obj.prop2 = None
+        self.assertEqual(self.obj.prop2, None)
+
+        self.obj.prop1 = 1
+        self.assertTrue(isinstance(self.obj.prop1, decimal))
