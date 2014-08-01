@@ -5,8 +5,8 @@
 """TxORM Property Unit Tests
 """
 
-from datetime import datetime
 from decimal import Decimal as decimal
+from datetime import datetime, date, time, timedelta
 
 from twisted.trial import unittest
 
@@ -19,11 +19,13 @@ from txorm.compiler.expressions import Select
 from txorm.property.base import SimpleProperty
 from txorm.compiler import Field, txorm_compile
 from txorm.property import (
-    Int, Bool, Float, Decimal, RawStr, Unicode, DateTime
+    Int, Bool, Float, Decimal, RawStr, Unicode, DateTime, Date, Time,
+    TimeDelta, Enum
 )
 from txorm.variable import (
     Variable, BoolVariable, IntVariable, FloatVariable, DecimalVariable,
-    RawStrVariable, UnicodeVariable, DateTimeVariable
+    RawStrVariable, UnicodeVariable, DateTimeVariable, DateVariable,
+    TimeVariable, TimeDeltaVariable, EnumVariable
 )
 
 from .test_expressions import assert_variables
@@ -424,17 +426,20 @@ class PropertyKindsTest(unittest.TestCase):
         self.variable1 = self.obj_data.variables[self.field1]
         self.variable2 = self.obj_data.variables[self.field2]
 
-    def test_bool(self):
-        self.setup(Bool, default=50, allow_none=False)
-
+    def commons(self, variable_type):
         self.assertTrue(isinstance(self.field1, Field))
         self.assertTrue(isinstance(self.field2, Field))
         self.assertEqual(self.field1.name, 'field1')
         self.assertEqual(self.field1.table, self.SubClass)
         self.assertEqual(self.field2.name, 'prop2')
         self.assertEqual(self.field2.table, self.SubClass)
-        self.assertTrue(isinstance(self.variable1, BoolVariable))
-        self.assertTrue(isinstance(self.variable2, BoolVariable))
+        self.assertTrue(isinstance(self.variable1, variable_type))
+        self.assertTrue(isinstance(self.variable2, variable_type))
+
+    def test_bool(self):
+        self.setup(Bool, default=50, allow_none=False)
+
+        self.commons(BoolVariable)
 
         self.assertEqual(self.obj.prop1, True)
         self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
@@ -449,14 +454,7 @@ class PropertyKindsTest(unittest.TestCase):
     def test_int(self):
         self.setup(Int, default=50, allow_none=False)
 
-        self.assertTrue(isinstance(self.field1, Field))
-        self.assertTrue(isinstance(self.field2, Field))
-        self.assertEqual(self.field1.name, 'field1')
-        self.assertEqual(self.field1.table, self.SubClass)
-        self.assertEqual(self.field2.name, 'prop2')
-        self.assertEqual(self.field2.table, self.SubClass)
-        self.assertTrue(isinstance(self.variable1, IntVariable))
-        self.assertTrue(isinstance(self.variable2, IntVariable))
+        self.commons(IntVariable)
 
         self.assertEqual(self.obj.prop1, 50)
         self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
@@ -471,14 +469,7 @@ class PropertyKindsTest(unittest.TestCase):
     def test_float(self):
         self.setup(Float, default=50.5, allow_none=False)
 
-        self.assertTrue(isinstance(self.field1, Field))
-        self.assertTrue(isinstance(self.field2, Field))
-        self.assertEqual(self.field1.name, 'field1')
-        self.assertEqual(self.field1.table, self.SubClass)
-        self.assertEqual(self.field2.name, 'prop2')
-        self.assertEqual(self.field2.table, self.SubClass)
-        self.assertTrue(isinstance(self.variable1, FloatVariable))
-        self.assertTrue(isinstance(self.variable2, FloatVariable))
+        self.commons(FloatVariable)
 
         self.assertEqual(self.obj.prop1, 50.5)
         self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
@@ -491,14 +482,7 @@ class PropertyKindsTest(unittest.TestCase):
     def test_decimal(self):
         self.setup(Decimal, default=decimal('50.5'), allow_none=False)
 
-        self.assertTrue(isinstance(self.field1, Field))
-        self.assertTrue(isinstance(self.field2, Field))
-        self.assertEqual(self.field1.name, 'field1')
-        self.assertEqual(self.field1.table, self.SubClass)
-        self.assertEqual(self.field2.name, 'prop2')
-        self.assertEqual(self.field2.table, self.SubClass)
-        self.assertTrue(isinstance(self.variable1, DecimalVariable))
-        self.assertTrue(isinstance(self.variable2, DecimalVariable))
+        self.commons(DecimalVariable)
 
         self.assertEqual(self.obj.prop1, decimal('50.5'))
         self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
@@ -511,14 +495,7 @@ class PropertyKindsTest(unittest.TestCase):
     def test_str(self):
         self.setup(RawStr, default=b('def'), allow_none=False)
 
-        self.assertTrue(isinstance(self.field1, Field))
-        self.assertTrue(isinstance(self.field2, Field))
-        self.assertEqual(self.field1.name, 'field1')
-        self.assertEqual(self.field1.table, self.SubClass)
-        self.assertEqual(self.field2.name, 'prop2')
-        self.assertEqual(self.field2.table, self.SubClass)
-        self.assertTrue(isinstance(self.variable1, RawStrVariable))
-        self.assertTrue(isinstance(self.variable2, RawStrVariable))
+        self.commons(RawStrVariable)
 
         self.assertEqual(self.obj.prop1, b('def'))
         self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
@@ -530,14 +507,7 @@ class PropertyKindsTest(unittest.TestCase):
     def test_unicode(self):
         self.setup(Unicode, default=u('unicode'), allow_none=False)
 
-        self.assertTrue(isinstance(self.field1, Field))
-        self.assertTrue(isinstance(self.field2, Field))
-        self.assertEqual(self.field1.name, 'field1')
-        self.assertEqual(self.field1.table, self.SubClass)
-        self.assertEqual(self.field2.name, 'prop2')
-        self.assertEqual(self.field2.table, self.SubClass)
-        self.assertTrue(isinstance(self.variable1, UnicodeVariable))
-        self.assertTrue(isinstance(self.variable2, UnicodeVariable))
+        self.commons(UnicodeVariable)
 
         self.assertEqual(self.obj.prop1, u('unicode'))
         self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
@@ -549,14 +519,7 @@ class PropertyKindsTest(unittest.TestCase):
     def test_datetime(self):
         self.setup(DateTime, default=0, allow_none=False)
 
-        self.assertTrue(isinstance(self.field1, Field))
-        self.assertTrue(isinstance(self.field2, Field))
-        self.assertEqual(self.field1.name, 'field1')
-        self.assertEqual(self.field1.table, self.SubClass)
-        self.assertEqual(self.field2.name, 'prop2')
-        self.assertEqual(self.field2.table, self.SubClass)
-        self.assertTrue(isinstance(self.variable1, DateTimeVariable))
-        self.assertTrue(isinstance(self.variable2, DateTimeVariable))
+        self.commons(DateTimeVariable)
 
         self.assertEqual(self.obj.prop1, datetime.utcfromtimestamp(0))
         self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
@@ -569,3 +532,109 @@ class PropertyKindsTest(unittest.TestCase):
         self.assertEqual(self.obj.prop1, datetime(2014, 7, 31, 0, 31))
 
         self.assertRaises(TypeError, setattr, self.obj, 'prop1', object())
+
+    def test_date(self):
+        self.setup(Date, default=date(2014, 8, 1), allow_none=False)
+
+        self.commons(DateVariable)
+
+        self.assertEqual(self.obj.prop1, date(2014, 8, 1))
+        self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
+        self.obj.prop2 = None
+        self.assertEqual(self.obj.prop2, None)
+
+        self.obj.prop1 = datetime(2014, 8, 1, 18, 44, 12)
+        self.assertEqual(self.obj.prop1, date(2014, 8, 1))
+        self.obj.prop1 = date(2014, 8, 1)
+        self.assertEqual(self.obj.prop1, date(2014, 8, 1))
+
+        self.assertRaises(TypeError, setattr, self.obj, 'prop1', object())
+
+    def test_time(self):
+        self.setup(Time, default=time(18, 50), allow_none=False)
+
+        self.commons(TimeVariable)
+
+        self.assertEqual(self.obj.prop1, time(18, 50))
+        self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
+        self.obj.prop2 = None
+        self.assertEqual(self.obj.prop2, None)
+
+        self.obj.prop1 = datetime(2014, 8, 1, 18, 44, 12)
+        self.assertEqual(self.obj.prop1, time(18, 44, 12))
+        self.obj.prop1 = time(18, 44, 12)
+        self.assertEqual(self.obj.prop1, time(18, 44, 12))
+
+        self.assertRaises(TypeError, setattr, self.obj, 'prop1', object())
+
+    def test_timedelta(self):
+        self.setup(
+            TimeDelta,
+            default=timedelta(days=1, seconds=2, microseconds=3),
+            allow_none=False
+        )
+
+        self.commons(TimeDeltaVariable)
+
+        self.assertEqual(
+            self.obj.prop1, timedelta(days=1, seconds=2, microseconds=3)
+        )
+        self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
+        self.obj.prop2 = None
+        self.assertEqual(self.obj.prop2, None)
+
+        self.obj.prop1 = timedelta(days=42, seconds=42, microseconds=42)
+        self.assertEqual(
+            self.obj.prop1, timedelta(days=42, seconds=42, microseconds=42)
+        )
+
+        self.assertRaises(TypeError, setattr, self.obj, 'prop1', object())
+
+    def test_enum(self):
+        self.setup(
+            Enum,
+            map={'sausage': 1, 'spam': 2},
+            default='spam',
+            allow_none=False,
+            prop2_kwargs={'map': {'susage': 1, 'spam': 2}}
+        )
+
+        self.commons(EnumVariable)
+
+        self.assertEqual(self.obj.prop1, 'spam')
+        self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
+        self.obj.prop2 = None
+        self.assertEqual(self.obj.prop2, None)
+
+        self.obj.prop1 = 'sausage'
+        self.assertEqual(self.obj.prop1, 'sausage')
+        self.obj.prop1 = 'spam'
+        self.assertEqual(self.obj.prop1, 'spam')
+
+        self.assertRaises(ValueError, setattr, self.obj, 'prop1', 'circus')
+        self.assertRaises(ValueError, setattr, self.obj, 'prop1', 1)
+
+    def test_enum_with_set_map(self):
+        self.setup(
+            Enum,
+            map={'sausage': 1, 'spam': 2},
+            set_map={'bacon': 1, 'chorizo': 2},
+            default='chorizo',
+            allow_none=False,
+            prop2_kwargs={'map': {'susage': 1, 'spam': 2}}
+        )
+
+        self.commons(EnumVariable)
+
+        self.assertEqual(self.obj.prop1, 'spam')
+        self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
+        self.obj.prop2 = None
+        self.assertEqual(self.obj.prop2, None)
+
+        self.obj.prop1 = 'bacon'
+        self.assertEqual(self.obj.prop1, 'sausage')
+        self.obj.prop1 = 'chorizo'
+        self.assertEqual(self.obj.prop1, 'spam')
+
+        self.assertRaises(ValueError, setattr, self.obj, 'prop1', 'sausage')
+        self.assertRaises(ValueError, setattr, self.obj, 'prop1', 1)
