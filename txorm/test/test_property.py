@@ -5,6 +5,7 @@
 """TxORM Property Unit Tests
 """
 
+import uuid
 from decimal import Decimal as decimal
 from datetime import datetime, date, time, timedelta
 
@@ -20,12 +21,13 @@ from txorm.property.base import SimpleProperty
 from txorm.compiler import Field, txorm_compile
 from txorm.property import (
     Int, Bool, Float, Decimal, RawStr, Unicode, DateTime, Date, Time,
-    TimeDelta, Enum
+    TimeDelta, Enum, MysqlEnum, UUID, Fraction
 )
 from txorm.variable import (
     Variable, BoolVariable, IntVariable, FloatVariable, DecimalVariable,
     RawStrVariable, UnicodeVariable, DateTimeVariable, DateVariable,
-    TimeVariable, TimeDeltaVariable, EnumVariable
+    TimeVariable, TimeDeltaVariable, EnumVariable, MysqlEnumVariable,
+    UUIDVariable, FractionVariable
 )
 
 from .test_expressions import assert_variables
@@ -638,3 +640,102 @@ class PropertyKindsTest(unittest.TestCase):
 
         self.assertRaises(ValueError, setattr, self.obj, 'prop1', 'sausage')
         self.assertRaises(ValueError, setattr, self.obj, 'prop1', 1)
+
+    def test_mysql_enum(self):
+        column = MysqlEnum(set={'foo', 'bar'}, default='foo')
+        self.assertEqual(column._variable_kwargs['_set'], set(['foo', 'bar']))
+
+        class EnumTest(object):
+            __storm_table__ = 'testtable'
+            prop1 = MysqlEnum(set={'foo', 'bar'}, default='foo', primary=True)
+
+        obj = EnumTest()
+
+        self.assertEqual(obj.prop1, 'foo')
+        obj.prop1 = 'bar'
+        self.assertEqual(obj.prop1, 'bar')
+
+        self.assertRaises(ValueError, setattr, obj, 'prop1', 'baz')
+        self.assertRaises(ValueError, setattr, obj, 'prop1', 1)
+
+    def test_uuid(self):
+        value1 = uuid.UUID('{b50cb608-450d-469b-9e11-6d18c916d3d0}')
+        value2 = uuid.UUID('{3b01f35c-8368-484e-bc70-406cde3ea693}')
+        self.setup(UUID, default=value1, allow_none=False)
+
+        self.commons(UUIDVariable)
+
+        self.assertEqual(self.obj.prop1, value1)
+        self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
+        self.obj.prop2 = None
+        self.assertEqual(self.obj.prop2, None)
+
+        self.obj.prop1 = value1
+        self.assertEqual(self.obj.prop1, value1)
+        self.obj.prop1 = value2
+        self.assertEqual(self.obj.prop1, value2)
+
+        self.assertRaises(
+            TypeError, setattr, self.obj, 'prop1',
+            '{b50cb608-450d-469b-9e11-6d18c916d3d0}'
+        )
+
+    def test_variable_factory_arguments(self):
+
+        class Class(object):
+            __database_table__ = 'test'
+            id = Int(primary=True)
+
+        validator_args = []
+
+        def validator(obj, attr, value):
+            validator_args[:] = obj, attr, value
+            return value
+
+        for func, cls, value in [
+            (Bool, BoolVariable, True),
+            (Int, IntVariable, 1),
+            (Float, FloatVariable, 1.1),
+            (RawStr, RawStrVariable, b('str')),
+            (Unicode, UnicodeVariable, u('unicode')),
+            (DateTime, DateTimeVariable, datetime.now()),
+            (Date, DateVariable, date.today()),
+                (Time, TimeVariable, datetime.now().time())]:
+
+            # Test no default and allow_none=True.
+            Class.prop = func(name='name')
+            column = Class.prop.__get__(None, Class)
+            self.assertEquals(column.name, 'name')
+            self.assertEquals(column.table, Class)
+
+            variable = column.variable_factory()
+            self.assertTrue(isinstance(variable, cls))
+            self.assertEquals(variable.get(), None)
+            variable.set(None)
+            self.assertEquals(variable.get(), None)
+
+            # Test default and allow_none=False.
+            Class.prop = func(name='name', default=value, allow_none=False)
+            column = Class.prop.__get__(None, Class)
+            self.assertEquals(column.name, 'name')
+            self.assertEquals(column.table, Class)
+
+            variable = column.variable_factory()
+            self.assertTrue(isinstance(variable, cls))
+            self.assertRaises(NoneError, variable.set, None)
+            self.assertEquals(variable.get(), value)
+
+            # Test validator.
+            Class.prop = func(name='name', validator=validator, default=value)
+            column = Class.prop.__get__(None, Class)
+            self.assertEquals(column.name, 'name')
+            self.assertEquals(column.table, Class)
+
+            del validator_args[:]
+            variable = column.variable_factory()
+            self.assertTrue(isinstance(variable, cls))
+            # Validator is not called on instantiation.
+            self.assertEquals(validator_args, [])
+            # But is when setting the variable.
+            variable.set(value)
+            self.assertEquals(validator_args, [None, 'prop', value])

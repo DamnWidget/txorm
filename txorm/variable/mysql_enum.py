@@ -16,7 +16,7 @@ class MysqlEnumVariable(Variable):
 
     def __init__(self, _set, *args, **kwargs):
         self._set = _set
-        super(Variable, self).__init__(*args, **kwargs)
+        super(MysqlEnumVariable, self).__init__(*args, **kwargs)
 
     def parse_set(self, value, from_db):
         if from_db is True:

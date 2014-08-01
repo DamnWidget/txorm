@@ -43,4 +43,4 @@ class Enum(SimpleProperty):
 
         kwargs['get_map'] = get_map
         kwargs['set_map'] = set_map
-        SimpleProperty.__init__(self, name, primary, **kwargs)
+        super(Enum, self).__init__(name, primary, **kwargs)
