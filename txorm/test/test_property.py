@@ -6,6 +6,7 @@
 """
 
 import uuid
+from fractions import Fraction as fraction
 from decimal import Decimal as decimal
 from datetime import datetime, date, time, timedelta
 
@@ -679,6 +680,23 @@ class PropertyKindsTest(unittest.TestCase):
             TypeError, setattr, self.obj, 'prop1',
             '{b50cb608-450d-469b-9e11-6d18c916d3d0}'
         )
+
+    def test_fraction(self):
+        self.setup(Fraction, default=fraction('8/1'), allow_none=False)
+
+        self.commons(FractionVariable)
+
+        self.assertEqual(self.obj.prop1, fraction('8/1'))
+        self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
+        self.obj.prop2 = None
+        self.assertEqual(self.obj.prop2, None)
+
+        self.obj.prop1 = fraction('1.20')
+        self.assertEqual(self.obj.prop1, fraction('6/5'))
+        self.obj.prop1 = fraction('1.40')
+        self.assertEqual(self.obj.prop1, fraction('7/5'))
+
+        self.assertRaises(TypeError, setattr, self.obj, 'prop1', 1)
 
     def test_variable_factory_arguments(self):
 
