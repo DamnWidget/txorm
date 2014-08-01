@@ -5,6 +5,7 @@
 """TxORM Property Unit Tests
 """
 
+from datetime import datetime
 from decimal import Decimal as decimal
 
 from twisted.trial import unittest
@@ -17,10 +18,12 @@ from txorm.compiler.plain_sql import SQLRaw
 from txorm.compiler.expressions import Select
 from txorm.property.base import SimpleProperty
 from txorm.compiler import Field, txorm_compile
-from txorm.property import Int, Bool, Float, Decimal, RawStr
+from txorm.property import (
+    Int, Bool, Float, Decimal, RawStr, Unicode, DateTime
+)
 from txorm.variable import (
     Variable, BoolVariable, IntVariable, FloatVariable, DecimalVariable,
-    RawStrVariable
+    RawStrVariable, UnicodeVariable, DateTimeVariable
 )
 
 from .test_expressions import assert_variables
@@ -523,3 +526,46 @@ class PropertyKindsTest(unittest.TestCase):
         self.assertEqual(self.obj.prop2, None)
 
         self.assertRaises(TypeError, setattr, self.obj, 'prop1', u('unicode'))
+
+    def test_unicode(self):
+        self.setup(Unicode, default=u('unicode'), allow_none=False)
+
+        self.assertTrue(isinstance(self.field1, Field))
+        self.assertTrue(isinstance(self.field2, Field))
+        self.assertEqual(self.field1.name, 'field1')
+        self.assertEqual(self.field1.table, self.SubClass)
+        self.assertEqual(self.field2.name, 'prop2')
+        self.assertEqual(self.field2.table, self.SubClass)
+        self.assertTrue(isinstance(self.variable1, UnicodeVariable))
+        self.assertTrue(isinstance(self.variable2, UnicodeVariable))
+
+        self.assertEqual(self.obj.prop1, u('unicode'))
+        self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
+        self.obj.prop2 = None
+        self.assertEqual(self.obj.prop2, None)
+
+        self.assertRaises(TypeError, setattr, self.obj, 'prop1', b('str'))
+
+    def test_datetime(self):
+        self.setup(DateTime, default=0, allow_none=False)
+
+        self.assertTrue(isinstance(self.field1, Field))
+        self.assertTrue(isinstance(self.field2, Field))
+        self.assertEqual(self.field1.name, 'field1')
+        self.assertEqual(self.field1.table, self.SubClass)
+        self.assertEqual(self.field2.name, 'prop2')
+        self.assertEqual(self.field2.table, self.SubClass)
+        self.assertTrue(isinstance(self.variable1, DateTimeVariable))
+        self.assertTrue(isinstance(self.variable2, DateTimeVariable))
+
+        self.assertEqual(self.obj.prop1, datetime.utcfromtimestamp(0))
+        self.assertRaises(NoneError, setattr, self.obj, 'prop1', None)
+        self.obj.prop2 = None
+        self.assertEqual(self.obj.prop2, None)
+
+        self.obj.prop1 = 0.0
+        self.assertEqual(self.obj.prop1, datetime.utcfromtimestamp(0))
+        self.obj.prop1 = datetime(2014, 7, 31, 0, 31)
+        self.assertEqual(self.obj.prop1, datetime(2014, 7, 31, 0, 31))
+
+        self.assertRaises(TypeError, setattr, self.obj, 'prop1', object())
