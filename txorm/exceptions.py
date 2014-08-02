@@ -33,3 +33,8 @@ class ObjectDataError(TxormError):
 class ClassDataError(TxormError):
     """Raised when errors on class info are detected
     """
+
+
+class PropertyPathError(TxormError):
+    """Raised when errors on PropertyRegistry paths resolution are found
+    """

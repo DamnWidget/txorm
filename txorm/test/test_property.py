@@ -12,23 +12,23 @@ from datetime import datetime, date, time, timedelta
 
 from twisted.trial import unittest
 
-from txorm.compat import b, u
-from txorm.exceptions import NoneError
+from txorm.compat import b, u, _PY3
 from txorm.compiler.state import State
 from txorm.object_data import get_obj_data
 from txorm.compiler.plain_sql import SQLRaw
 from txorm.compiler.expressions import Select
-from txorm.property.base import SimpleProperty
 from txorm.compiler import Field, txorm_compile
+from txorm.property.base import SimpleProperty, Property
+from txorm.exceptions import NoneError, PropertyPathError
 from txorm.property import (
     Int, Bool, Float, Decimal, RawStr, Unicode, DateTime, Date, Time,
-    TimeDelta, Enum, MysqlEnum, UUID, Fraction
+    TimeDelta, Enum, MysqlEnum, UUID, Fraction, PropertyRegisterMeta
 )
 from txorm.variable import (
     Variable, BoolVariable, IntVariable, FloatVariable, DecimalVariable,
     RawStrVariable, UnicodeVariable, DateTimeVariable, DateVariable,
-    TimeVariable, TimeDeltaVariable, EnumVariable, MysqlEnumVariable,
-    UUIDVariable, FractionVariable
+    TimeVariable, TimeDeltaVariable, EnumVariable, UUIDVariable,
+    FractionVariable
 )
 
 from .test_expressions import assert_variables
@@ -757,3 +757,57 @@ class PropertyKindsTest(unittest.TestCase):
             # But is when setting the variable.
             variable.set(value)
             self.assertEquals(validator_args, [None, 'prop', value])
+
+
+class TxORMPropertyRegistryTest(unittest.TestCase):
+
+    def setUp(self):
+
+        if _PY3:
+            from ._meta_python3 import Base
+        else:
+            from ._meta_python2 import Base
+
+        class Class(Base):
+            __database_table__ = 'mytable'
+            prop1 = Property('field1', primary=True)
+            prop2 = Property()
+
+        class SubClass(Class):
+            __database_table__ = 'mysubtable'
+
+        self.Class = Class
+        self.SubClass = SubClass
+
+        class Class(Class):
+            __module__ += '.foo'
+            prop3 = Property('field3')
+
+        self.AnotherClass = Class
+        self.registry = Class._txorm_property_registry
+
+    def test_get_empty(self):
+        self.assertRaises(PropertyPathError, self.registry.get, 'unexistent')
+
+    def test_get_subclass(self):
+        if _PY3:
+            from ._meta_python3 import BaseClassMetaTest
+        else:
+            from ._meta_python2 import BaseClassMetaTest
+
+        test_suite = BaseClassMetaTest()
+        test_suite.setUp()
+        test_suite.test_get_subclass()
+
+    def test_get_ambiguous(self):
+        self.assertRaises(PropertyPathError, self.registry.get, 'Class.prop1')
+        self.assertRaises(PropertyPathError, self.registry.get, 'Class.prop2')
+
+    def test_storm_compatibility(self):
+
+        class StormClass(self.Class):
+            __storm_tale__ = 'stormtable'
+            prop1 = Property('storm_field1', primary=True)
+
+        prop1 = self.registry.get('StormClass.prop1')
+        self.assertTrue(prop1 is StormClass.prop1)

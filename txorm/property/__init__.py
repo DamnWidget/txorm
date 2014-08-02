@@ -20,10 +20,12 @@ from ._datetime import DateTime
 from .timedelta import TimeDelta
 from .mysql_enum import MysqlEnum
 from .base import Property, SimpleProperty
+from .registry import PropertyRegistry, PropertyRegisterMeta
 
 
 __all__ = [
     'Property', 'SimpleProperty',
     'Int', 'Bool', 'Float', 'Decimal', 'RawStr', 'Unicode', 'DateTime', 'Date',
-    'Time', 'TimeDelta', 'Enum', 'MysqlEnum', 'UUID', 'Fraction'
+    'Time', 'TimeDelta', 'Enum', 'MysqlEnum', 'UUID', 'Fraction',
+    'PropertyRegistry', 'PropertyRegisterMeta'
 ]
