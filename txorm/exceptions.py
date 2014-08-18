@@ -38,3 +38,8 @@ class ClassDataError(TxormError):
 class PropertyPathError(TxormError):
     """Raised when errors on PropertyRegistry paths resolution are found
     """
+
+
+class URIError(TxormError):
+    """Raised when errors on URI parsing are found
+    """
