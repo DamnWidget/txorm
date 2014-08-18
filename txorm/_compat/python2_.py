@@ -3,6 +3,7 @@
 # See LICENSE for details
 
 import re
+import sys
 import urlparse
 
 try:
@@ -31,6 +32,21 @@ def __splitquery(url):
     return url, None
 
 urlparse.splitquery = __splitquery
+
+# urlparse prior to Python 2.7.6 have a bug in parsing the port, fix it
+if sys.version_info < (2, 7, 6):
+    def port(self):
+        netloc = self.netloc.split('@')[-1].split(']')[-1]
+        if ':' in netloc:
+            port = netloc.split(':')[1]
+            if port:
+                port = int(port, 10)
+                # verify legal port
+                if (0 <= port <= 65535):
+                    return port
+        return None
+
+    urlparse.ResultMixin.port = property(port)
 
 
 __all__ = ['pickle', 'StringIO', 'urlparse']
