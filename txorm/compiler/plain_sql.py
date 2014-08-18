@@ -5,7 +5,7 @@
 import re
 
 from txorm import Undef
-from txorm.compat import binary_type, text_type
+from txorm.compat import text_type
 from .comparable import ComparableExpression
 
 

@@ -21,11 +21,12 @@ from .tables import Table
 from .suffixes import Asc, Desc
 from .fields import Field, Alias
 from .expressions import AutoTables
-from .plain_sql import SQL, SQLToken
+from .comparable import Min, Max, Avg
 from .comparable import LShift, RShift
+from .plain_sql import SQL, SQLToken, SQLRaw
 from .comparable import Func, NamedFunc, Cast
-from .comparable import Add, Sub, Mul, Div, Mod, Neg
 from txorm.exceptions import CompileError, NoTableError
+from .comparable import Sum, Add, Sub, Mul, Div, Mod, Neg
 from .expressions import Union, Except, Intersect, Distinct
 from .tables import Join, LeftJoin, RightJoin, JoinExpression
 from .base import Compile, txorm_compile, txorm_compile_python
@@ -910,6 +911,6 @@ __all__ = [
     'SQL', 'LShift', 'RShift', 'Join', 'LeftJoin', 'RightJoin', 'NaturalJoin',
     'NaturalLeftJoin', 'NaturalRightJoin', 'Union', 'Except', 'Intersect',
     'Or', 'And', 'Eq', 'Ne', 'Gt', 'Ge', 'Lt', 'Le', 'Like', 'In', 'Mul',
-    'Div', 'Mod', 'Add', 'Sub', 'NoTableError', 'Field', 'Alias',
-    'Asc', 'Desc'
+    'Div', 'Mod', 'Add', 'Sum', 'Sub', 'NoTableError', 'Field', 'Alias',
+    'Asc', 'Desc', 'Min', 'Max', 'Avg', 'SQLRaw'
 ]
