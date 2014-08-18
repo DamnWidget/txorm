@@ -5,6 +5,7 @@
 """Simple signaling system
 """
 
+import weakref
 import functools
 
 
@@ -14,46 +15,56 @@ class Signal(object):
     How to use:
 
         class SomeData:
-            def __init__(self, owner):
+            def __init__(self):
                 self.data = {}
-                self.modified = Signal(owner)
+                self.modified = Signal(self)
 
             @signal('modified')
             def set_some_data(self, foo, bar):
                 self.data[foo] = bar
 
+        some_data = SomeData()
         display = SomeDataDisplay()
         some_data.modified.connect(display.update_somedata)
     """
 
-    def __init__(self):
+    def __init__(self, owner):
+        self._owner_ref = weakref.ref(owner)
         self.listeners = []
 
-    def connect(self, listener):
+    def connect(self, listener, *args, **kwargs):
         """Connect a new listener
 
         :param listener: the listener to connect
         """
 
-        if listener not in self.listeners:
-            self.listeners.append(listener)
+        if (listener, args, kwargs) not in self.listeners:
+            self.listeners.append((listener, args, kwargs))
 
-    def disconnect(self, listener):
+    def disconnect(self, listener, *args, **kwargs):
         """Disconnects a listener
 
         :param listener: the listener to disconnect
         """
 
-        if listener in self.listeners:
-            self.listeners.remove(listener)
+        if (listener, args, kwargs) in self.listeners:
+            self.listeners.remove((listener, args, kwargs))
 
     def fire(self, *args, **kwargs):
         """Fire up the signal
         """
 
-        [listener(*args, **kwargs) for listener in self.listeners]
+        owner = self._owner_ref()
+        if owner is not None:
+            for listener in self.listeners:
+                callback, data, kwdata = listener
+                kwdata.update(kwargs)
+                result = callback(*(data+args), **kwdata)
+                if result is False:
+                    self.disconnect(callback, *data, **kwdata)
 
-    def fire_signal(self, signal):
+    @classmethod
+    def fire_signal(cls, signal):
         """Decorate `func` to fire signals when ready
 
         :param signal: the name of the signal to be fired
@@ -67,14 +78,14 @@ class Signal(object):
             @functools.wraps(func)
             def wrapper(obj, *args, **kwargs):
                 result = func(obj, *args, **kwargs)
-                getattr(obj, signal).fire(obj)
+                getattr(obj, signal).fire(*args, **kwargs)
                 return result
 
             return wrapper
 
         return decorator
 
-signal = Signal().fire_signal
+signal = Signal.fire_signal
 
 
 __all__ = ['Signal', 'signal']
