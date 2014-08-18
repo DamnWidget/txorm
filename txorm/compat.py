@@ -22,14 +22,14 @@ else:
 _PY3 = False if sys.version_info < (3, 0) else True
 
 if _PY3:
-    from ._compat.python3_ import pickle, StringIO
+    from ._compat.python3_ import pickle, StringIO, urlparse
 
     text_type = str
     binary_type = bytes
     integer_types = (int, )
 
 else:
-    from _compat.python2_ import pickle, StringIO
+    from _compat.python2_ import pickle, StringIO, urlparse
 
     text_type = unicode
     binary_type = str
@@ -69,5 +69,5 @@ def iteritems(d):
 
 __all__ = [
     'b', 'json', 'pickle', 'StringIO', 'text_type', 'binary_type',
-    'itervalues', 'iterkeys', 'iteritems'
+    'itervalues', 'iterkeys', 'iteritems', 'urlparse'
 ]

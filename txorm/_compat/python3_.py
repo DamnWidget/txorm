@@ -5,5 +5,7 @@
 import pickle
 from io import StringIO
 
+from urllib import parse as urlparse
 
-__all__ = ['pickle', 'StringIO']
+
+__all__ = ['pickle', 'StringIO', 'urlparse']
