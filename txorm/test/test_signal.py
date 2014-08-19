@@ -111,7 +111,35 @@ class SignalTest(unittest.TestCase):
         self.assertEqual(called, [(1, 2), (3, 4)])
 
     def test_weak_reference(self):
-        pass
+
+        class Marker(object):
+            pass
+
+        marker = Marker()
+        called = []
+
+        def callback(owner):
+            called.append(owner)
+
+        class Event(object):
+
+            def __init__(self, owner):
+                self.modified = Signal(owner)
+
+            @signal('modified')
+            def emit(self, owner):
+                pass
+
+        event = Event(marker)
+        event.modified.connect(callback)
+        event.emit(event.modified.owner)
+
+        self.assertEqual(called, [marker])
+        del called[:]
+
+        del marker
+        event.emit(event.modified.owner)
+        self.assertEqual(called, [])
 
 
 class SomeData:

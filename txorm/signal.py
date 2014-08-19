@@ -32,6 +32,13 @@ class Signal(object):
         self._owner_ref = weakref.ref(owner)
         self.listeners = []
 
+    @property
+    def owner(self):
+        """Return back the Signal owner (not a ref to the signal owner)
+        """
+
+        return self._owner_ref()
+
     def connect(self, listener, *args, **kwargs):
         """Connect a new listener
 
