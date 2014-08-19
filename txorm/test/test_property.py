@@ -13,7 +13,7 @@ from datetime import datetime, date, time, timedelta
 
 from twisted.trial import unittest
 
-from txorm.compat import b, u, _PY3
+from txorm.compat import b, u
 from txorm.compiler.state import State
 from txorm.object_data import get_obj_data
 from txorm.compiler.plain_sql import SQLRaw
@@ -23,8 +23,7 @@ from txorm.property.base import SimpleProperty, Property
 from txorm.exceptions import NoneError, PropertyPathError
 from txorm.property import (
     Int, Bool, Float, Decimal, RawStr, Unicode, DateTime, Date, Time,
-    TimeDelta, Enum, MysqlEnum, UUID, Fraction, PropertyRegisterMeta,
-    PropertyRegistry
+    TimeDelta, Enum, MysqlEnum, UUID, Fraction, PropertyRegistry
 )
 from txorm.variable import (
     Variable, BoolVariable, IntVariable, FloatVariable, DecimalVariable,
