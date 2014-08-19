@@ -121,7 +121,7 @@ class PropertyRegistry(object):
         """Registry a propert of the given class that may be found by `get()`
         """
 
-        suffix = cls.__modeule__.split('.')
+        suffix = cls.__module__.split('.')
         suffix.append(cls.__name__)
         suffix.reverse()
         suffix = '.{}.'.format('.'.join(suffix))

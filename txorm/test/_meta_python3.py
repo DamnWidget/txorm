@@ -16,9 +16,6 @@ class BaseClassMetaTest(unittest.TestCase):
 
     def setUp(self):
 
-        class Base(object, metaclass=PropertyRegisterMeta):
-            pass
-
         class Class(Base):
             __database_table__ = 'mytable'
             prop1 = Property('field1', primary=True)
@@ -29,10 +26,23 @@ class BaseClassMetaTest(unittest.TestCase):
 
         self.Class = Class
         self.SubClass = SubClass
-        self.registry = Class._txorm_property_registry
+
+        class Class(Class):
+            Class.__module__ += '.foo'
+            prop3 = Property('field3')
+
+        self.AnotherClass = Class
+        self.registry = Base._txorm_property_registry
+
+    def test_get_empty(self):
+        self.assertRaises(PropertyPathError, self.registry.get, 'unexistent')
 
     def test_get_subclass(self):
         prop1 = self.registry.get('SubClass.prop1')
         prop2 = self.registry.get('SubClass.prop2')
         self.assertTrue(prop1 is self.SubClass.prop1)
         self.assertTrue(prop2 is self.SubClass.prop2)
+
+    def test_get_ambiguous(self):
+        self.assertRaises(PropertyPathError, self.registry.get, 'Class.prop1')
+        self.assertRaises(PropertyPathError, self.registry.get, 'Class.prop2')

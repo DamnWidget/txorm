@@ -5,6 +5,7 @@
 """TxORM Property Unit Tests
 """
 
+import gc
 import uuid
 from fractions import Fraction as fraction
 from decimal import Decimal as decimal
@@ -22,7 +23,8 @@ from txorm.property.base import SimpleProperty, Property
 from txorm.exceptions import NoneError, PropertyPathError
 from txorm.property import (
     Int, Bool, Float, Decimal, RawStr, Unicode, DateTime, Date, Time,
-    TimeDelta, Enum, MysqlEnum, UUID, Fraction, PropertyRegisterMeta
+    TimeDelta, Enum, MysqlEnum, UUID, Fraction, PropertyRegisterMeta,
+    PropertyRegistry
 )
 from txorm.variable import (
     Variable, BoolVariable, IntVariable, FloatVariable, DecimalVariable,
@@ -763,12 +765,7 @@ class TxORMPropertyRegistryTest(unittest.TestCase):
 
     def setUp(self):
 
-        if _PY3:
-            from ._meta_python3 import Base
-        else:
-            from ._meta_python2 import Base
-
-        class Class(Base):
+        class Class(object):
             __database_table__ = 'mytable'
             prop1 = Property('field1', primary=True)
             prop2 = Property()
@@ -778,30 +775,100 @@ class TxORMPropertyRegistryTest(unittest.TestCase):
 
         self.Class = Class
         self.SubClass = SubClass
-
-        class Class(Class):
-            __module__ += '.foo'
-            prop3 = Property('field3')
-
-        self.AnotherClass = Class
-        self.registry = Class._txorm_property_registry
+        self.AnotherClass = type('Class', (Class,), {})
+        self.registry = PropertyRegistry()
 
     def test_get_empty(self):
         self.assertRaises(PropertyPathError, self.registry.get, 'unexistent')
 
-    def test_get_subclass(self):
-        if _PY3:
-            from ._meta_python3 import BaseClassMetaTest
-        else:
-            from ._meta_python2 import BaseClassMetaTest
+    def test_get(self):
+        self.registry.add_class(self.Class)
+        prop1 = self.registry.get('prop1')
+        prop2 = self.registry.get('prop2')
+        self.assertTrue(prop1 is self.Class.prop1)
+        self.assertTrue(prop2 is self.Class.prop2)
 
-        test_suite = BaseClassMetaTest()
-        test_suite.setUp()
-        test_suite.test_get_subclass()
+    def test_get_with_class_name(self):
+        self.registry.add_class(self.Class)
+        prop1 = self.registry.get('Class.prop1')
+        prop2 = self.registry.get('Class.prop2')
+        self.assertTrue(prop1 is self.Class.prop1)
+        self.assertTrue(prop2 is self.Class.prop2)
+
+    def test_get_with_two_classes(self):
+        self.registry.add_class(self.Class)
+        self.registry.add_class(self.SubClass)
+        prop1 = self.registry.get('Class.prop1')
+        prop2 = self.registry.get('Class.prop2')
+        self.assertTrue(prop1 is self.Class.prop1)
+        self.assertTrue(prop2 is self.Class.prop2)
+        prop1 = self.registry.get('SubClass.prop1')
+        prop2 = self.registry.get('SubClass.prop2')
+        self.assertTrue(prop1 is self.SubClass.prop1)
+        self.assertTrue(prop2 is self.SubClass.prop2)
 
     def test_get_ambiguous(self):
+        self.AnotherClass.__module__ += '.foo'
+        self.registry.add_class(self.Class)
+        self.registry.add_class(self.SubClass)
+        self.registry.add_class(self.AnotherClass)
         self.assertRaises(PropertyPathError, self.registry.get, 'Class.prop1')
         self.assertRaises(PropertyPathError, self.registry.get, 'Class.prop2')
+        prop1 = self.registry.get('SubClass.prop1')
+        prop2 = self.registry.get('SubClass.prop2')
+        self.assertTrue(prop1 is self.SubClass.prop1)
+        self.assertTrue(prop2 is self.SubClass.prop2)
+
+    def test_get_ambiguous_but_different_path(self):
+        self.AnotherClass.__module__ += '.foo'
+        self.registry.add_class(self.Class)
+        self.registry.add_class(self.SubClass)
+        self.registry.add_class(self.AnotherClass)
+        prop1 = self.registry.get('test_property.Class.prop1')
+        prop2 = self.registry.get('test_property.Class.prop2')
+        self.assertTrue(prop1 is self.Class.prop1)
+        self.assertTrue(prop2 is self.Class.prop2)
+        prop1 = self.registry.get('SubClass.prop1')
+        prop2 = self.registry.get('SubClass.prop2')
+        self.assertTrue(prop1 is self.SubClass.prop1)
+        self.assertTrue(prop2 is self.SubClass.prop2)
+        prop1 = self.registry.get('foo.Class.prop1')
+        prop2 = self.registry.get('foo.Class.prop2')
+        self.assertTrue(prop1 is self.AnotherClass.prop1)
+        self.assertTrue(prop2 is self.AnotherClass.prop2)
+
+    def test_get_ambiguous_but_different_path_with_namespace(self):
+        self.AnotherClass.__module__ += '.foo'
+        self.registry.add_class(self.Class)
+        self.registry.add_class(self.SubClass)
+        self.registry.add_class(self.AnotherClass)
+        prop1 = self.registry.get('Class.prop1', 'test.test_property')
+        prop2 = self.registry.get('Class.prop2', 'test.test_property.bar')
+        self.assertTrue(prop1 is self.Class.prop1)
+        self.assertTrue(prop2 is self.Class.prop2)
+        prop1 = self.registry.get(
+            'Class.prop1', 'txorm.test.test_property.foo')
+        prop2 = self.registry.get(
+            'Class.prop2', 'txorm.test.test_property.foo.bar')
+        self.assertTrue(prop1 is self.AnotherClass.prop1)
+        self.assertTrue(prop2 is self.AnotherClass.prop2)
+
+    def test_class_is_collectable(self):
+        self.AnotherClass.__module__ += '.foo'
+        self.registry.add_class(self.Class)
+        self.registry.add_class(self.AnotherClass)
+        del self.AnotherClass
+        gc.collect()
+        prop1 = self.registry.get('prop1')
+        prop2 = self.registry.get('prop2')
+        self.assertTrue(prop1 is self.Class.prop1)
+        self.assertTrue(prop2 is self.Class.prop2)
+
+    def test_add_property(self):
+        self.registry.add_property(self.Class, self.Class.prop1, 'custom_name')
+        prop1 = self.registry.get('Class.custom_name')
+        self.assertEquals(prop1, self.Class.prop1)
+        self.assertRaises(PropertyPathError, self.registry.get, 'Class.prop1')
 
     def test_storm_compatibility(self):
 
@@ -809,5 +876,6 @@ class TxORMPropertyRegistryTest(unittest.TestCase):
             __storm_tale__ = 'stormtable'
             prop1 = Property('storm_field1', primary=True)
 
+        self.registry.add_class(StormClass)
         prop1 = self.registry.get('StormClass.prop1')
         self.assertTrue(prop1 is StormClass.prop1)
