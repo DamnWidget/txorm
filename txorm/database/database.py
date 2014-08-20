@@ -2,8 +2,6 @@
 # Copyright (c) 2014 Oscar Campos <oscar.campos@member.fsf.org>
 # See LICENSE for details
 
-from __future__ import unicode_literals
-
 import txorm
 from txorm.utils.uri import URI
 from txorm.variable import Variable
@@ -30,6 +28,18 @@ class Database(object):
 
         return self.connection_factory(self)
 
+    def raw_connect(self):
+        """Create a raw database connection
+
+        This is used by :class:`txorm.database.connection.Connection`
+        objects to connect to the database. It should be overriden in
+        subclasses to do any database-specific setup
+        """
+        raise NotImplementedError
+
+
+_database_schemes = {}
+
 
 def create_database(uri):
     """Create a database instance.
@@ -41,4 +51,13 @@ def create_database(uri):
     if is_basestring(uri):
         uri = URI(uri)
 
-    if uri.scheme not in _database_schemes:
+    if uri.scheme in _database_schemes:
+        factory = _database_schemes[uri.scheme]
+    else:
+        module = __import__(
+            '{}.databases.{}'.format(txorm.__name__, uri.scheme),
+            None, None, ['']
+        )
+        factory = module.create_from_uri
+
+    return factory(uri)
