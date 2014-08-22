@@ -8,10 +8,6 @@ from txorm.property import Property
 from txorm.property.registry import PropertyRegisterMeta, PropertyPathError
 
 
-class Base(object):
-    __metaclass__ = PropertyRegisterMeta
-
-
 class BaseClassMetaTest(unittest.TestCase):
 
     def setUp(self):
